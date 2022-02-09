@@ -49,7 +49,7 @@ class Visitor(ast.NodeVisitor):
     def optimize(self):
         return pickletools.optimize(self.result)
 
-    def find_var(self, key, tip="变量"):
+    def _find_var(self, key, tip="变量"):
         loc = self.names.get(key, None)
         if loc is None:
             # 说明之前没有定义这个变量
@@ -67,7 +67,7 @@ class Visitor(ast.NodeVisitor):
         return f'{opcode}\n'
 
     def _parse_name(self, node):
-        memo_name = self.find_var(node.id)
+        memo_name = self._find_var(node.id)
         opcode = f'g{memo_name}\n'
         self.stack.append(memo_name)
         return opcode
@@ -139,7 +139,7 @@ class Visitor(ast.NodeVisitor):
                 f"暂不支持对此种写法进行函数调用：{self.code}"
             )
 
-        memo_name = self.find_var(node.func.id, tip="函数")
+        memo_name = self._find_var(node.func.id, tip="函数")
         if self.stack and self.stack[-1] == memo_name:
             # 要执行的函数就在栈顶
             pass
