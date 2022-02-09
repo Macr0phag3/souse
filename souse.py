@@ -93,6 +93,10 @@ class Visitor(ast.NodeVisitor):
 
     def _parse_subscript(self, node):
         # 先分析 [] 里面
+        if isinstance(node.slice, ast.Index):
+            # 兼容 py < 3.9
+            node.slice = node.slice.value
+
         if isinstance(node.slice, ast.Name):
             # eg: a[b]
             inside_opcode = self._parse_name(node.slice)
@@ -105,6 +109,7 @@ class Visitor(ast.NodeVisitor):
                 raise RuntimeError(
                     f"暂时只支持对字典类型进行索引操作：{self.code}"
                 )
+
         else:
             raise RuntimeError(
                 f"暂时不支持这种索引：{self.code}"
@@ -251,7 +256,7 @@ class Visitor(ast.NodeVisitor):
 
 
 Init()
-VERSION = '1.0'
+VERSION = '1.1'
 
 
 print(
@@ -330,7 +335,7 @@ for filename in filenames:
             print(f' {put_color("√", "green")}', end="")
             continue
         else:
-            print(f' {put_color("x", "yellow")}', end="")
+            print(f' {put_color("✗", "yellow")}', end="")
 
     print(f'\n  [-] raw opcode:       {put_color(visitor.result, "green")}', end="")
 
