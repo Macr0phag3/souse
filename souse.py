@@ -164,9 +164,16 @@ class Visitor(ast.NodeVisitor):
         opcode += 'tR'
         return opcode
 
-    # def visit_Import(self, node):
-    #     # import system
-    #     self.direct_import.append(node.module)
+    def visit_Import(self, node):
+        # eg: import os
+
+        for _name in node.names:
+            name = _name.name
+            asname = f'as {_name.asname}' if _name.asname else ''
+
+            raise RuntimeError(
+                f"请使用 from {name} import xxx {asname}"
+            )
 
     def visit_ImportFrom(self, node):
         # eg: from os import system
@@ -318,32 +325,38 @@ print(f'[*] need check: {put_color(need_check, ["white", "green"][int(need_check
 print(f'[*] need optimize: {put_color(need_optimize, ["white", "green"][int(need_optimize)])}')
 
 for filename in filenames:
-    print(f'\n[+] input: {put_color(filename, "white")}', end="")
-    source_code = open(filename).read()
-    root = ast.parse(source_code)
-    visitor = Visitor()
-    visitor.visit(root)
-
-    visitor.souse()
-    if run_test:
-        answer = [
-            i.replace("# ", "").strip()
-            for i in open(filename).readlines() if i.strip()
-        ][-1]
-        correct = answer == str(visitor.result)
-        if correct:
-            print(f' {put_color("√", "green")}', end="")
-            continue
+    tip = lambda c: f'[+] input: {put_color(filename, c)}'  # noqa: E731
+    try:
+        source_code = open(filename).read()
+        root = ast.parse(source_code)
+        visitor = Visitor()
+        visitor.visit(root)
+        visitor.souse()
+    except Exception:
+        print(tip("red"), end="\n\n")
+        raise
+    else:
+        if run_test:
+            answer = [
+                i.replace("# ", "").strip()
+                for i in open(filename).readlines() if i.strip()
+            ][-1]
+            correct = answer == str(visitor.result)
+            if correct:
+                print(tip("green"))
+                continue
+            else:
+                print(tip("yellow"))
         else:
-            print(f' {put_color("✗", "yellow")}', end="")
+            print(tip("green"))
 
-    print(f'\n  [-] raw opcode:       {put_color(visitor.result, "green")}', end="")
+    print(f'  [-] raw opcode:       {put_color(visitor.result, "green")}')
 
     if need_optimize:
-        print(f'\n  [-] optimized opcode: {put_color(visitor.optimize(), "green")}', end="")
+        print(f'  [-] optimized opcode: {put_color(visitor.optimize(), "green")}')
 
     if need_check:
-        print(f'\n  [-] opcode test result: {put_color(visitor.check(), "white")}', end="")
+        print(f'  [-] opcode test result: {put_color(visitor.check(), "white")}')
 
     if run_test:
         loc = [
@@ -356,6 +369,6 @@ for filename in filenames:
             put_color(answer[loc:-1], "yellow") +
             put_color(answer[-1], "green")
         )
-        print(f'\n  [-] answer for test:  {answer}', end="")
+        print(f'  [-] answer for test:  {answer}')
 
-print("\n\n[*] done")
+print("\n[*] done")
