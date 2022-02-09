@@ -266,12 +266,12 @@ print(
 ░  ░  ░  ░ ░ ░ ▒   ░░░ ░ ░ ░  ░  ░     ░   
       ░      ░ ░     ░           ░     ░  ░ v{Fore.GREEN}{VERSION}{Style.RESET_ALL}
 '''
-    .replace('█', put_color('█', "green", bold=False))
+    .replace('█', put_color('█', "yellow"))
     .replace('▒', put_color('▒', "yellow", bold=False))
     .replace('▓', put_color('▓', "yellow"))
     .replace('░', put_color('░', "white", bold=False))
-    .replace('▀', put_color('▀', "green"))
-    .replace('▄', put_color('▄', "green"))
+    .replace('▀', put_color('▀', "yellow"))
+    .replace('▄', put_color('▄', "yellow"))
 )
 
 parser = argparse.ArgumentParser(description=f'Version: {VERSION}; Running in Py3.x')
