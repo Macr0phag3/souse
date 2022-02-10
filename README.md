@@ -12,17 +12,17 @@ A tool for converting Python source code to opcode(pickle)
 
 > case 1
 
-<img src="/pics/eg-1.png" width="600">
+<img src="/pics/eg-1.png" width="300">
 <img src="/pics/eg-1-s.png" width="600">
 
 > case 2
 
-<img src="/pics/eg-2.png" width="600">
+<img src="/pics/eg-2.png" width="300">
 <img src="/pics/eg-2-s.png" width="600">
 
 > test code
 
-<img src="/pics/test.png" width="600">
+<img src="/pics/test.png" width="400">
 
 ## TODO
 - [ ] support for nested expressions
