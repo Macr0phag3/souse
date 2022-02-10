@@ -12,12 +12,22 @@ A tool for converting Python source code to opcode(pickle)
 
 > case 1
 
+source code:
+
 <img src="/pics/eg-1.png" width="300">
+
+opcode:
+
 <img src="/pics/eg-1-s.png" width="600">
 
 > case 2
 
+source code:
+
 <img src="/pics/eg-2.png" width="300">
+
+opcode:
+
 <img src="/pics/eg-2-s.png" width="600">
 
 > test code
