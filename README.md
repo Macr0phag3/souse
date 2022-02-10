@@ -35,7 +35,7 @@ opcode:
 <img src="/pics/test.png" width="400">
 
 ## TODO
-- [ ] support for nested expressions
+- [x] support for nested expressions
 - [ ] bypass plugins
 
 ## Others
