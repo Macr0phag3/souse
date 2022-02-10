@@ -37,7 +37,11 @@ def value_type_map(value):
 
     v = cmap.get(value, None)
     if v is None:
-        raise RuntimeError(f'value: {value} is unknown type')
+        raise RuntimeError(
+            put_color('this basic type is not supported yet :', 'red') +
+            f"{put_color(value, 'cyan')} in {self.code}, "
+            f"type is {put_color(type(value), 'cyan')}"
+        )
     else:
         return v
 
@@ -74,12 +78,13 @@ class Visitor(ast.NodeVisitor):
 
         return pickletools.optimize(b'\n'.join(optimized))
 
-    def _find_var(self, key, tip="变量"):
+    def _find_var(self, key):
         loc = self.names.get(key, None)
         if loc is None:
             # 说明之前没有定义这个变量
             raise RuntimeError(
-                f"{tip} {key} 没有定义！"
+                put_color("this var is not defined: ", "red") +
+                f'{put_color(key, "cyan")} in {self.code}'
             )
         else:
             # g 进来
@@ -130,7 +135,8 @@ class Visitor(ast.NodeVisitor):
 
         else:
             raise RuntimeError(
-                f"暂不支持此数据结构：{node.__class__}"
+                put_color("this struct is not supported yet: ", "red") +
+                f'{put_color(node.__class__, "cyan")} in {self.code}'
             )
 
     def _parse_attribute(self, node):
@@ -149,7 +155,8 @@ class Visitor(ast.NodeVisitor):
             # return f'(N}}V{attr}\n{opcode}\nstb'
         else:
             raise RuntimeError(
-                f"暂不支持此点号运算符：{self.code}"
+                put_color("this complex dot operators(.) is not supported yet: ", "red") +
+                f'{put_color(targets.__class__, "cyan")} in {self.code}'
             )
 
     def _parse_subscript(self, node):
@@ -160,7 +167,8 @@ class Visitor(ast.NodeVisitor):
 
         if isinstance(node.slice, ast.Subscript):
             raise RuntimeError(
-                f"暂不支持索引嵌套：{node.__class__}"
+                put_color("this nested index is not supported yet: ") +
+                f'{put_color(node.slice.__class__, "cyan")} in {self.code}'
             )
 
         inside_opcode = self._flat(node.slice)
@@ -183,25 +191,33 @@ class Visitor(ast.NodeVisitor):
                 continue
             else:
                 raise RuntimeError(
-                    f"暂不支持对此种写法进行函数调用：{self.code}, {node.func.__class__}"
+                    put_color("this function call is not supported yet: ", "red") +
+                    f'{put_color(node.func.__class__, "cyan")} in {self.code}'
                 )
 
         # 获取函数名
         # eg: from sys import modules
         #     a = modules.get("os")
-        memo_name = self._find_var(node.func.id, tip="函数")
         func_name = self._flat(node.func)
         return func_name + b"".join(opcode[::-1])
 
     def visit_Import(self, node):
         # eg: import os
+        self.code = put_color("\n".join(
+            source_code.split('\n')
+            [node.lineno-1: node.end_lineno]
+        ), "white")
 
         for _name in node.names:
             name = _name.name
-            asname = f'as {_name.asname}' if _name.asname else ''
+            asname = f' as {_name.asname}' if _name.asname else ''
 
             raise RuntimeError(
-                f"请使用 from {name} import xxx {asname}"
+                put_color("direct import is not supported yet: ", "red") +
+                f"{self.code}, "
+                "use " +
+                put_color(f"from {name} import xxx{asname}", "cyan") +
+                " instead!"
             )
 
     def visit_ImportFrom(self, node):
@@ -219,15 +235,12 @@ class Visitor(ast.NodeVisitor):
     def visit_Assign(self, node):
         # 赋值
         # a = "whoami"
-        def _raise(tip):
-            raise RuntimeError(
-                f"{tip}：{self.code}, {node.value.__class__}"
-            )
 
         def _generate_opcode():
             if isinstance(node.targets[0], ast.Tuple):
                 raise RuntimeError(
-                    "暂不支持批量赋值，请拆开写"
+                    put_color("mass assignment is not supported yet: ", "red") +
+                    f"{self.code}, unpack it!"
                 )
 
             # 先分析等号左边
@@ -258,7 +271,8 @@ class Visitor(ast.NodeVisitor):
 
             else:
                 raise RuntimeError(
-                    f"暂不支持此赋值语句的左半部分: {self.code}, {node.targets[0].__class__}"
+                    put_color("this complex assignment is not supported yet: ", "red") +
+                    f"{put_color(node.targets[0].__class__, 'cyan')} in the left part of {self.code}"
                 )
 
             # 再分析等号右边
@@ -270,10 +284,10 @@ class Visitor(ast.NodeVisitor):
                 b"{right_opcode}", right_opcode
             )
 
-        self.code = "\n".join(
+        self.code = put_color("\n".join(
             source_code.split('\n')
             [node.lineno-1: node.end_lineno]
-        )
+        ), "white")
         _generate_opcode()
 
     def visit_Call(self, node):
@@ -281,10 +295,10 @@ class Visitor(ast.NodeVisitor):
         def _generate_opcode():
             self.final_opcode += self._flat(node)
 
-        self.code = "\n".join(
+        self.code = put_color("\n".join(
             source_code.split('\n')
             [node.lineno-1:node.end_lineno]
-        )
+        ), "white")
         _generate_opcode()
 
 
