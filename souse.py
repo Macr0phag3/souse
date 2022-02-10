@@ -22,15 +22,24 @@ def put_color(string, color, bold=True):
 
 def value_type_map(value):
     vmap = {
-        int: 'I',
-        float: 'F',
-        str: 'V',
+        int: f'I',
+        float: f'F',
+        str: f'V',
+    }
+    cmap = {
+        None: 'N',
+        True: 'I01\n',
+        False: 'I00\n',
     }
     for _type in vmap:
-        if isinstance(value, _type):
-            return vmap[_type]
+        if type(value) is _type:
+            return f'{vmap[_type]}{value}\n'
 
-    raise RuntimeError(f'value: {value} is unknown type')
+    v = cmap.get(value, None)
+    if v is None:
+        raise RuntimeError(f'value: {value} is unknown type')
+    else:
+        return v
 
 
 class Visitor(ast.NodeVisitor):
@@ -125,9 +134,9 @@ class Visitor(ast.NodeVisitor):
 
     def _parse_constant(self, node):
         value = node.value
-        opcode = f'{value_type_map(value)}{value}'
-        self.stack.append(opcode)
-        return f'{opcode}\n'.encode('utf-8')
+        opcode = value_type_map(value)
+        self.stack.append(opcode.strip())
+        return opcode.encode('utf-8')
 
     def _parse_name(self, node):
         memo_name = self._find_var(node.id)
