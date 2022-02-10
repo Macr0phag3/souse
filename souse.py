@@ -44,7 +44,6 @@ def value_type_map(value):
 
 class Visitor(ast.NodeVisitor):
     def __init__(self):
-        self.stack = []  # 模拟 stack
         self.names = {}  # 变量记录
         self.memo_id = 0  # memo 的顶层 id
 
@@ -57,92 +56,82 @@ class Visitor(ast.NodeVisitor):
         return pickle.loads(self.result)
 
     def optimize(self):
-        return pickletools.optimize(self.result)
+        optimized = []
+        result = pickletools.optimize(self.result).split(b'\n')
+        memo_g_ids = [i for i in result if i.startswith(b"g")]
+        while result:
+            optimized.append(result.pop(0))
+
+            if (
+                len(optimized) > 2 and
+                optimized[-2].startswith(b"p") and
+                optimized[-1].startswith(b"g") and
+                optimized[-1][1:] == optimized[-2][1:] and
+                memo_g_ids.count(optimized[-1]) == 1
+            ):
+                # 优化掉
+                optimized.pop()
+
+        return pickletools.optimize(b'\n'.join(optimized))
 
     def _find_var(self, key, tip="变量"):
         loc = self.names.get(key, None)
         if loc is None:
             # 说明之前没有定义这个变量
             raise RuntimeError(
-                f"{tip} {key.decode('utf-8')} 没有定义！"
+                f"{tip} {key} 没有定义！"
             )
         else:
             # g 进来
             return loc
 
-    def _parse_set(self, node):
-        # PVM Protocol 4
-        opcode = b'\x8f('
-        for dim in node.elts:
-            if isinstance(dim, ast.Constant):
-                opcode += self._parse_constant(dim)
-            elif isinstance(dim, ast.Name):
-                opcode += self._parse_name(dim)
-            else:
-                raise RuntimeError(
-                    f"集合暂不支持此类型元素: {dim.__class__}"
-                )
+    def _flat(self, node):
+        if isinstance(node, ast.Constant):
+            return value_type_map(node.value).encode('utf-8')
 
-        opcode += b'\x90'
-        return opcode
+        elif isinstance(node, ast.Set):
+            # PVM Protocol 4
+            return (
+                b'\x8f(' +
+                b"".join([self._flat(elt) for elt in node.elts]) +
+                b'\x90'
+            )
 
-    def _parse_list(self, node):
-        opcode = b'('
-        for dim in node.elts:
-            if isinstance(dim, ast.Constant):
-                opcode += self._parse_constant(dim)
-            elif isinstance(dim, ast.Name):
-                opcode += self._parse_name(dim)
-            else:
-                raise RuntimeError(
-                    f"列表暂不支持此类型元素: {dim.__class__}"
-                )
+        elif isinstance(node, ast.List):
+            return (
+                b'(' +
+                b"".join([self._flat(elt) for elt in node.elts]) +
+                b'l'
+            )
 
-        opcode += b'l'
-        return opcode
+        elif isinstance(node, ast.Tuple):
+            return (
+                b'(' +
+                b"".join([self._flat(elt) for elt in node.elts]) +
+                b't'
+            )
 
-    def _parse_tuple(self, node):
-        opcode = b'('
-        for dim in node.dims:
-            if isinstance(dim, ast.Constant):
-                opcode += self._parse_constant(dim)
-            elif isinstance(dim, ast.Name):
-                opcode += self._parse_name(dim)
-            else:
-                raise RuntimeError(
-                    f"元组暂不支持此类型元素: {dim.__class__}"
-                )
+        elif isinstance(node, ast.Dict):
+            return (
+                b'(' +
+                b"".join([self._flat(k) + self._flat(v) for k, v in zip(node.keys, node.values)]) +
+                b'd'
+            )
 
-        opcode += b't'
-        return opcode
+        elif isinstance(node, ast.Name):
+            memo_name = self._find_var(node.id)
+            return f'g{memo_name}\n'.encode('utf-8')
 
-    def _parse_dict(self, node):
-        opcode = b'('
-        for i in zip(node.keys, node.values):
-            for j in i:
-                if isinstance(j, ast.Constant):
-                    opcode += self._parse_constant(j)
-                elif isinstance(j, ast.Name):
-                    opcode += self._parse_name(j)
-                else:
-                    raise RuntimeError(
-                        f"字典暂不支持此类型键/值: {j.__class__}"
-                    )
+        elif isinstance(node, ast.Call):
+            return self._parse_call(node)
 
-        opcode += b'd'
-        return opcode
+        elif isinstance(node, ast.Subscript):
+            return self._parse_subscript(node)
 
-    def _parse_constant(self, node):
-        value = node.value
-        opcode = value_type_map(value)
-        self.stack.append(opcode.strip())
-        return opcode.encode('utf-8')
-
-    def _parse_name(self, node):
-        memo_name = self._find_var(node.id)
-        opcode = f'g{memo_name}\n'
-        self.stack.append(memo_name)
-        return opcode.encode('utf-8')
+        else:
+            raise RuntimeError(
+                f"暂不支持此数据结构：{node.__class__}"
+            )
 
     def _parse_attribute(self, node):
         targets = node.value
@@ -154,7 +143,7 @@ class Visitor(ast.NodeVisitor):
             # eg: from fake_module import A
             #     A.a = 1  # A is 'mappingproxy' object
 
-            opcode = self._parse_name(targets)
+            opcode = self._flat(targets)
             return opcode, attr.encode("utf-8")
             # module, name = self.import_from.get(name, [None, ]*2)
             # return f'(N}}V{attr}\n{opcode}\nstb'
@@ -169,72 +158,40 @@ class Visitor(ast.NodeVisitor):
             # 兼容 py < 3.9
             node.slice = node.slice.value
 
-        if isinstance(node.slice, ast.Name):
-            # eg: a[b]
-            inside_opcode = self._parse_name(node.slice)
-
-        elif isinstance(node.slice, ast.Constant):
-            # eg: a["1"]
-            inside_opcode = self._parse_constant(node.slice)
-            if not inside_opcode.startswith(b"V"):
-                # 说明不为字典的 index
-                raise RuntimeError(
-                    f"暂时只支持对字典类型进行索引操作：{self.code}"
-                )
-
-        else:
+        if isinstance(node.slice, ast.Subscript):
             raise RuntimeError(
-                f"暂时不支持这种索引：{self.code}"
+                f"暂不支持索引嵌套：{node.__class__}"
             )
+
+        inside_opcode = self._flat(node.slice)
 
         # 再分析 [] 外面
-        if isinstance(node.value, ast.Name):
-            # eg: a[b]
-            outside_opcode = self._parse_name(node.value)
-
-        elif isinstance(node.value, ast.Call):
-            outside_opcode = self._parse_call(node.value)
-
-        else:
-            raise RuntimeError(
-                f"暂不支持对此种写法进行索引操作：{self.code}"
-            )
-
+        outside_opcode = self._flat(node.value)
         return outside_opcode, inside_opcode
 
     def _parse_call(self, node):
-        opcode = b""
-        if not isinstance(node.func, ast.Name):
-            # eg: from sys import modules
-            #     a = modules.get("os")
-            raise RuntimeError(
-                f"暂不支持对此种写法进行函数调用：{self.code}"
+        opcode = []
+        while True:
+            opcode.append(
+                b"(" + b"".join([self._flat(arg) for arg in node.args]) + b"tR"
             )
+            if isinstance(node.func, ast.Name):
+                break
 
-        memo_name = self._find_var(node.func.id, tip="函数")
-        if self.stack and self.stack[-1] == memo_name:
-            # 要执行的函数就在栈顶
-            pass
-        else:
-            opcode += f'g{memo_name}\n'.encode('utf-8')
-            self.stack.append(memo_name)
-
-        opcode += b'('
-        for arg in node.args:
-            if isinstance(arg, ast.Name):
-                # 参数是变量
-                opcode += self._parse_name(arg)
-
-            elif isinstance(arg, ast.Constant):
-                opcode += self._parse_constant(arg)
-
+            elif isinstance(node.func, ast.Call):
+                node = node.func
+                continue
             else:
                 raise RuntimeError(
-                    f"暂不支持的参数类型！{arg.__class__}"
+                    f"暂不支持对此种写法进行函数调用：{self.code}, {node.func.__class__}"
                 )
 
-        opcode += b'tR'
-        return opcode
+        # 获取函数名
+        # eg: from sys import modules
+        #     a = modules.get("os")
+        memo_name = self._find_var(node.func.id, tip="函数")
+        func_name = self._flat(node.func)
+        return func_name + b"".join(opcode[::-1])
 
     def visit_Import(self, node):
         # eg: import os
@@ -255,7 +212,6 @@ class Visitor(ast.NodeVisitor):
                 name = _name.asname or _name.name
                 self.names[name] = str(self.memo_id)
                 self.final_opcode += f'c{node.module}\n{name}\np{self.memo_id}\n'.encode('utf-8')
-                self.stack.append(str(self.memo_id))
                 self.memo_id += 1
 
         _generate_opcode()
@@ -282,7 +238,6 @@ class Visitor(ast.NodeVisitor):
                                 .replace(b'{self.memo_id}', str(self.memo_id).encode("utf-8"))
 
                 self.names[name] = str(self.memo_id)
-                self.stack.append(str(self.memo_id))
                 self.memo_id += 1
 
             elif isinstance(node.targets[0], ast.Attribute):
@@ -294,7 +249,7 @@ class Visitor(ast.NodeVisitor):
 
             elif isinstance(node.targets[0], ast.Subscript):
                 # eg: a["test"] = ...
-                outside_opcode, inside_opcode = self._parse_subscript(
+                outside_opcode, inside_opcode = self._flat(
                     node.targets[0]
                 )
                 assign_opcode = b'{outside_opcode}({inside_opcode}{right_opcode}u' \
@@ -310,12 +265,7 @@ class Visitor(ast.NodeVisitor):
             # eg: ... = a -> isinstance(node.value, ast.Name)
             # eg: ... = 1 -> isinstance(node.value, ast.Constant)
             # eg: a = builtins.globals() -> isinstance(node.value, ast.Call)
-            right_opcode = getattr(
-                self,
-                "_parse_" + node.value.__class__.__name__.lower(),
-                lambda _: _raise("暂不支持此赋值语句的右半部分")
-            )(node.value)
-
+            right_opcode = self._flat(node.value)
             self.final_opcode += assign_opcode.replace(
                 b"{right_opcode}", right_opcode
             )
@@ -329,7 +279,7 @@ class Visitor(ast.NodeVisitor):
     def visit_Call(self, node):
         # 函数调用
         def _generate_opcode():
-            self.final_opcode += self._parse_call(node)
+            self.final_opcode += self._flat(node)
 
         self.code = "\n".join(
             source_code.split('\n')
@@ -342,7 +292,7 @@ Init()
 VERSION = '1.2'
 
 
-print(
+(
     f'''
   ██████  ▒█████   █    ██   ██████ ▓█████ 
 ▒██    ▒ ▒██▒  ██▒ ██  ▓██▒▒██    ▒ ▓█   ▀ 
