@@ -1,5 +1,5 @@
 # souse
-A tool for converting Python source code to opcode(pickle), bypass plugins are supported.
+A tool for converting Python source code to opcode(pickle)
 
 ## help
 
@@ -7,6 +7,8 @@ A tool for converting Python source code to opcode(pickle), bypass plugins are s
 
 
 ## usage
+
+`./test/` has some example codes for souse.py. The filename starts with `N` is NOT supported yet.
 
 > case 1
 
@@ -17,6 +19,14 @@ A tool for converting Python source code to opcode(pickle), bypass plugins are s
 
 <img src="/pics/eg-2.png" width="600">
 <img src="/pics/eg-2-s.png" width="600">
+
+> test code
+
+<img src="/pics/test.png" width="600">
+
+## TODO
+- [ ] support for nested expressions
+- [ ] bypass plugins
 
 ## Others
 <img src="https://clean-1252075454.cos.ap-nanjing.myqcloud.com/20200528120800990.png" width="500">
