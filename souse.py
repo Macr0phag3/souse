@@ -362,8 +362,8 @@ if run_test:
 else:
     filenames = [args.filename]
 
-print(f'[*] need check: {put_color(need_check, ["white", "green"][int(need_check)])}')
-print(f'[*] need optimize: {put_color(need_optimize, ["white", "green"][int(need_optimize)])}')
+print(f'[*] need check: {put_color(need_check, ["gray", "green"][int(need_check)])}')
+print(f'[*] need optimize: {put_color(need_optimize, ["gray", "green"][int(need_optimize)])}')
 
 for filename in filenames:
     def tip(c): return f'[+] input: {put_color(filename, c)}'
@@ -384,12 +384,12 @@ for filename in filenames:
             ][-1]
             correct = answer == str(visitor.result)
             if correct:
-                print(tip("green"))
+                print(tip("cyan"))
                 continue
             else:
                 print(tip("yellow"))
         else:
-            print(tip("green"))
+            print(tip("cyan"))
 
     print(f'  [-] raw opcode:       {put_color(visitor.result, "green")}')
 
