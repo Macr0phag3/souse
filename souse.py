@@ -354,10 +354,11 @@ if run_test:
     # 不执行 opcode
     need_optimize = False
     need_check = False
-    filenames = [
-        "./test/"+i for i in list(os.walk("./test"))[0][2]
+    directory = "./test/"
+    filenames = sorted([
+        directory+i for i in list(os.walk(directory))[0][2]
         if not i.startswith("N-")
-    ]
+    ])
 else:
     filenames = [args.filename]
 
@@ -365,7 +366,7 @@ print(f'[*] need check: {put_color(need_check, ["white", "green"][int(need_check
 print(f'[*] need optimize: {put_color(need_optimize, ["white", "green"][int(need_optimize)])}')
 
 for filename in filenames:
-    def tip(c): return f'[+] input: {put_color(filename, c)}'  # noqa: E731
+    def tip(c): return f'[+] input: {put_color(filename, c)}'
     try:
         source_code = open(filename).read()
         root = ast.parse(source_code)
