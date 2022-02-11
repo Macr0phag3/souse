@@ -339,7 +339,7 @@ group = parser.add_mutually_exclusive_group(required=True)
 group.add_argument("-f", "--filename", help=".py source code filename")
 group.add_argument(
     "--run-test", action="store_true",
-    help="run test with test/^[^N]*.py"
+    help="run test with test/*.py (not startswith `N-`)"
 )
 
 args = parser.parse_args()
