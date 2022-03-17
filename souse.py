@@ -1,6 +1,8 @@
 import os
 import ast
+import json
 import pickle
+import struct
 import argparse
 import pickletools
 
@@ -20,20 +22,94 @@ def put_color(string, color, bold=True):
     return f'{Style.BRIGHT if bold else ""}{COLOR}{str(string)}{Style.RESET_ALL}'
 
 
+def format_opcode(code, value):
+    def _pure(value):
+        return repr(value.strip())[2:-1] if isinstance(value, bytes) else value.strip()
+
+    def _format(code, value='', return_value=False):
+        if code == b"S":
+            return f"S'{value}'\n".encode('utf-8')
+
+        elif code == b"J":
+            # limit: -2147483648 <= value <= 2147483647
+            value = struct.pack('i0i', value)
+
+        if not isinstance(value, bytes):
+            value = str(value).encode('utf-8')
+            if value:
+                value += b"\n"
+
+        if return_value:
+            return _pure(value), code + value
+
+        return code + value
+
+    code = code if isinstance(code, list) else [code]
+    if not bypass:
+        # 不需要 bypass
+        return _format(code[0], value)
+
+    pure_code = [_pure(i) for i in code]
+
+    related_rules = {
+        k: v for k, v in firewall_rules.items()
+        if k in pure_code and v in [str(value), "*"]
+    }
+    if not related_rules:
+        # 不需要 bypass
+        return _format(code[0], value)
+
+    if rule_type == 'black':
+        for i, v in enumerate(pure_code):
+            for _c, _v in related_rules.items():
+                if _v == "*":
+                    if _c != v:
+                        # 直接换掉
+                        print(
+                            f"[*] choice {put_color(v, 'blue')} "
+                            # f"instead of {put_color(pure_code[0], 'white')} "
+                            f"to bypass rule: {put_color({_c: _v}, 'white')}"
+                        )
+                        return _format(code[i], value)
+
+                elif _v == str(value):
+                    # 替换 value
+                    try:
+                        new_v, bypassed = _format(code[i], value, return_value=True)
+                    except struct.error as e:
+                        pass
+
+                    else:
+                        if _v != new_v:
+                            print(
+                                f"[*] choice {put_color(v, 'blue')} "
+                                # f"instead of {put_color(pure_code[0], 'white')} "
+                                f"to bypass rule: {put_color({_c: _v}, 'white')}"
+                            )
+                            return bypassed
+
+        # 均失败
+        raise RuntimeError(
+            f"can NOT bypass: {put_color(related_rules, 'white')}, "
+            f"must use opcode in {put_color(pure_code, 'white')}"
+        )
+
+
 def value_type_map(value):
     vmap = {
-        int: f'I',
-        float: f'F',
-        str: f'V',
+        int: [b'I', b'J'],
+        float: b'F',
+        str: [b'V', b'S'],
     }
     cmap = {
-        None: 'N',
-        True: 'I01\n',
-        False: 'I00\n',
+        None: b'N',
+        True: [b'I01\n', b'\x88'],
+        False: [b'I00\n', b'\x89'],
     }
     for _type in vmap:
         if type(value) is _type:
-            return f'{vmap[_type]}{value}\n'
+            v = vmap[_type]
+            return format_opcode(v, value)
 
     v = cmap.get(value, None)
     if v is None:
@@ -43,7 +119,7 @@ def value_type_map(value):
             f"type is {put_color(type(value), 'cyan')}"
         )
     else:
-        return v
+        return format_opcode(v, "")
 
 
 class Visitor(ast.NodeVisitor):
@@ -92,7 +168,7 @@ class Visitor(ast.NodeVisitor):
 
     def _flat(self, node):
         if isinstance(node, ast.Constant):
-            return value_type_map(node.value).encode('utf-8')
+            return value_type_map(node.value)
 
         elif isinstance(node, ast.Set):
             # PVM Protocol 4
@@ -303,7 +379,7 @@ class Visitor(ast.NodeVisitor):
 
 
 Init()
-VERSION = '1.2'
+VERSION = '2.0'
 
 
 print(
@@ -341,6 +417,10 @@ group.add_argument(
     "--run-test", action="store_true",
     help="run test with test/*.py (not startswith `N-`)"
 )
+parser.add_argument(
+    "-p", "--bypass", default=False,
+    help="try bypass limitation"
+)
 
 args = parser.parse_args()
 
@@ -350,10 +430,10 @@ run_test = args.run_test
 
 if run_test:
     # 代码质量测试模式下
-    # 不优化 opcode
-    # 不执行 opcode
+    # 不优化 opcode、不执行 opcode、不 bypass
     need_optimize = False
     need_check = False
+    bypass = False
     directory = "./test/"
     filenames = sorted([
         directory+i for i in list(os.walk(directory))[0][2]
@@ -362,8 +442,29 @@ if run_test:
 else:
     filenames = [args.filename]
 
-print(f'[*] need check: {put_color(need_check, ["gray", "green"][int(need_check)])}')
+print(f'[*] need check:    {put_color(need_check, ["gray", "green"][int(need_check)])}')
 print(f'[*] need optimize: {put_color(need_optimize, ["gray", "green"][int(need_optimize)])}')
+
+firewall_rules = {}
+bypass = False
+if args.bypass:
+    try:
+        firewalls = json.load(open(args.bypass))
+    except Exception as e:
+        print("\n[!]", put_color(f"{args.bypass} has invalid bypass rules: {e}\n", 'yellow'))
+    else:
+        rule_type = firewalls.get("type", None)
+        if rule_type not in ["black", "white"]:
+            print("\n[!]", put_color(f'{args.bypass} must contains a json key: `type` in `["black", "white"]`\n', "yellow"))
+        else:
+            firewall_rules = firewalls.get('rules', {})
+
+            if not firewall_rules:
+                print("\n[!]", put_color(f"{args.bypass} has no rules\n", 'yellow'))
+            else:
+                bypass = True
+
+print(f'[*] try bypass:    {put_color(args.bypass, ["gray", "cyan"][int(bypass)])}\n')
 
 for filename in filenames:
     def tip(c): return f'[+] input: {put_color(filename, c)}'
