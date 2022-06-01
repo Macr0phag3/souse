@@ -485,7 +485,7 @@ for filename in filenames:
             ][-1]
             correct = answer == str(visitor.result)
             if correct:
-                print(tip("cyan"))
+                print(tip("green"))
                 continue
             else:
                 print(tip("yellow"))
