@@ -125,24 +125,12 @@ def value_type_map(value):
 
 
 def transfer_funcs(func_name):
-    name = {
-        "b64": "base64_encode",
-        "base64": "base64_encode",
-        "base64encode": "base64_encode",
-
-        "hex": "hex_encode",
-        "hexencode": "hex_encode",
-
-        "url": "url_decode",
-        "urldecode": "url_decode",
-    }.get(func_name, func_name)
-
     return {
         'base64_encode': __import__('base64').b64encode,
         'hex_encode': functools.partial(__import__('codecs').encode, encoding="hex"),
         'url_decode': __import__('urllib.parse', fromlist=[""]).quote_plus,
     }.get(
-        name,
+        FUNC_NAME.get(func_name, func_name),
         lambda x: put_color(
             f"no such transfer function: {put_color(func_name, 'blue')}",
             "yellow"
@@ -408,7 +396,17 @@ class Visitor(ast.NodeVisitor):
 
 Init()
 VERSION = '2.1'
+FUNC_NAME = {
+    "b64": "base64_encode",
+    "base64": "base64_encode",
+    "base64encode": "base64_encode",
 
+    "hex": "hex_encode",
+    "hexencode": "hex_encode",
+
+    "url": "url_decode",
+    "urldecode": "url_decode",
+}
 
 print(
     f'''
@@ -451,7 +449,7 @@ parser.add_argument(
 )
 parser.add_argument(
     "-t", "--transfer", default=None,
-    help="transfer result(eg. base64encode)"
+    help=f"transfer result with: { {i for i in FUNC_NAME.values()} }"
 )
 
 args = parser.parse_args()
