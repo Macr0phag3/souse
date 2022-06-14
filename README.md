@@ -30,9 +30,22 @@ opcode:
 
 <img src="/pics/eg-2-s.png" width="600">
 
+> case 3
+
+transfer opcode:
+
+<img src="/pics/eg-3.png" width="600">
+
+supported:
+- [x] base64_encode
+- [x] hex_encode
+- [x] url_encode
+
 > test code
 
 <img src="/pics/test.png" width="400">
+
+
 
 ## TODO
 - [x] support for nested expressions

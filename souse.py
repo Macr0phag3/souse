@@ -4,6 +4,7 @@ import json
 import pickle
 import struct
 import argparse
+import functools
 import pickletools
 
 from colorama import Fore, Style, init as Init
@@ -75,7 +76,8 @@ def format_opcode(code, value):
                 elif _v == str(value):
                     # 替换 value
                     try:
-                        new_v, bypassed = _format(code[i], value, return_value=True)
+                        new_v, bypassed = _format(
+                            code[i], value, return_value=True)
                     except struct.error as e:
                         pass
 
@@ -120,6 +122,32 @@ def value_type_map(value):
         )
     else:
         return format_opcode(v, "")
+
+
+def transfer_funcs(func_name):
+    name = {
+        "b64": "base64_encode",
+        "base64": "base64_encode",
+        "base64encode": "base64_encode",
+
+        "hex": "hex_encode",
+        "hexencode": "hex_encode",
+
+        "url": "url_decode",
+        "urldecode": "url_decode",
+    }.get(func_name, func_name)
+
+    return {
+        'base64_encode': __import__('base64').b64encode,
+        'hex_encode': functools.partial(__import__('codecs').encode, encoding="hex"),
+        'url_decode': __import__('urllib.parse', fromlist=[""]).quote_plus,
+    }.get(
+        name,
+        lambda x: put_color(
+            f"no such transfer function: {put_color(func_name, 'blue')}",
+            "yellow"
+        )
+    )
 
 
 class Visitor(ast.NodeVisitor):
@@ -379,7 +407,7 @@ class Visitor(ast.NodeVisitor):
 
 
 Init()
-VERSION = '2.0'
+VERSION = '2.1'
 
 
 print(
@@ -421,12 +449,18 @@ parser.add_argument(
     "-p", "--bypass", default=False,
     help="try bypass limitation"
 )
+parser.add_argument(
+    "-t", "--transfer", default=None,
+    help="transfer result(eg. base64encode)"
+)
 
 args = parser.parse_args()
 
 need_check = args.check
 need_optimize = args.no_optimize
 run_test = args.run_test
+transfer = args.transfer
+transfer_func = transfer_funcs(transfer)
 
 if run_test:
     # 代码质量测试模式下
@@ -442,8 +476,8 @@ if run_test:
 else:
     filenames = [args.filename]
 
-print(f'[*] need check:    {put_color(need_check, ["gray", "green"][int(need_check)])}')
-print(f'[*] need optimize: {put_color(need_optimize, ["gray", "green"][int(need_optimize)])}')
+print(f'[*] need check:        {put_color(need_check, ["gray", "green"][int(need_check)])}')
+print(f'[*] need optimize:     {put_color(need_optimize, ["gray", "green"][int(need_optimize)])}')
 
 firewall_rules = {}
 bypass = False
@@ -464,8 +498,8 @@ if args.bypass:
             else:
                 bypass = True
 
-print(f'[*] try bypass:    {put_color(args.bypass, ["gray", "cyan"][int(bypass)])}\n')
-
+print(f'[*] try bypass:        {put_color(args.bypass, ["gray", "cyan"][int(bypass)])}')
+print(f'[*] transfer function: {put_color(transfer, ["blue", "gray"][bool(bypass)])}\n')
 for filename in filenames:
     def tip(c): return f'[+] input: {put_color(filename, c)}'
     try:
@@ -492,10 +526,16 @@ for filename in filenames:
         else:
             print(tip("cyan"))
 
-    print(f'  [-] raw opcode:       {put_color(visitor.result, "green")}')
+    print(f'  [-] raw opcode:         {put_color(visitor.result, "green")}')
 
     if need_optimize:
-        print(f'  [-] optimized opcode: {put_color(visitor.optimize(), "green")}')
+        print(f'  [-] optimized opcode:   {put_color(visitor.optimize(), "green")}')
+
+        if transfer:
+            print(f'  [-] transfered opcode:  {put_color(transfer_func(visitor.optimize()), "green")}')
+
+    elif transfer:
+        print(f'  [-] transfered opcode:  {put_color(transfer_func(visitor.result), "green")}')
 
     if need_check:
         print(f'  [-] opcode test result: {put_color(visitor.check(), "white")}')
