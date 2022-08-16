@@ -23,11 +23,11 @@ def put_color(string, color, bold=True):
     return f'{Style.BRIGHT if bold else ""}{COLOR}{str(string)}{Style.RESET_ALL}'
 
 
-def format_opcode(code, value):
+def format_opcode(code, value=None):
     def _pure(value):
         return repr(value.strip())[2:-1] if isinstance(value, bytes) else value.strip()
 
-    def _format(code, value='', return_value=False):
+    def _format(code, value, return_value=False):
         if code == b"S":
             return f"S'{value}'\n".encode('utf-8')
 
@@ -36,9 +36,7 @@ def format_opcode(code, value):
             value = struct.pack('i0i', value)
 
         if not isinstance(value, bytes):
-            value = str(value).encode('utf-8')
-            if value:
-                value += b"\n"
+            value = b"" if value is None else (str(value).encode('utf-8') + b"\n")
 
         if return_value:
             return _pure(value), code + value
@@ -121,7 +119,7 @@ def value_type_map(value):
             f"type is {put_color(type(value), 'cyan')}"
         )
     else:
-        return format_opcode(v, "")
+        return format_opcode(v)
 
 
 def transfer_funcs(func_name):
@@ -294,6 +292,7 @@ class Visitor(ast.NodeVisitor):
         return func_name + b"".join(opcode[::-1])
 
     def visit_Import(self, node):
+        # DO NOT USE iT!
         # eg: import os
         self.code = put_color("\n".join(
             source_code.split('\n')
@@ -315,6 +314,7 @@ class Visitor(ast.NodeVisitor):
     def visit_ImportFrom(self, node):
         # eg: from os import system
         # eg: from os import system as sys
+        # eg: from os import system, popen
         def _generate_opcode():
             for _name in node.names:
                 name = _name.asname or _name.name
@@ -549,6 +549,6 @@ for filename in filenames:
             put_color(answer[loc:-1], "yellow") +
             put_color(answer[-1], "green")
         )
-        print(f'  [-] answer for test:  {answer}')
+        print(f'  [-] answer for test:    {answer}')
 
 print("\n[*] done")
