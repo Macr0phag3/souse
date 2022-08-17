@@ -52,7 +52,6 @@ supported:
 - [x] value bypass supported
 	- [x] number
 
-
 ## ## Others
 <img src="https://clean-1252075454.cos.ap-nanjing.myqcloud.com/20200528120800990.png" width="500">
 
