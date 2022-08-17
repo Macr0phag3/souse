@@ -24,23 +24,26 @@ def put_color(string, color, bold=True):
 
 
 def transfer_funcs(func_name):
-    return {
+    func = {
         'base64_encode': __import__('base64').b64encode,
         'hex_encode': functools.partial(__import__('codecs').encode, encoding="hex"),
         'url_decode': __import__('urllib.parse', fromlist=[""]).quote_plus,
-    }.get(
-        FUNC_NAME.get(func_name, func_name),
-        lambda x: put_color(
+    }.get(FUNC_NAME.get(func_name, func_name), None)
+    if func is None:
+        raise RuntimeError(put_color(
             f"no such transfer function: {put_color(func_name, 'blue')}",
             "yellow"
-        )
-    )
+        ))
+
+    return func
 
 
 class Visitor(ast.NodeVisitor):
-    def __init__(self):
+    def __init__(self, source_code, firewall_rules):
         self.names = {}  # 变量记录
         self.memo_id = 0  # memo 的顶层 id
+        self.firewall_rules = firewall_rules
+        self.source_code = source_code
 
         self.final_opcode = b''
 
@@ -97,7 +100,7 @@ class Visitor(ast.NodeVisitor):
         def __generate_int():
             code = ['I', 'J']
             related_rules = {
-                k: v for k, v in firewall_rules.items()
+                k: v for k, v in self.firewall_rules.items()
                 if k in code and v in [str(node.value), "*"]
             }
             if not related_rules:
@@ -131,7 +134,7 @@ class Visitor(ast.NodeVisitor):
         def __generate_str():
             code = ['V', 'S']
             related_rules = {
-                k: v for k, v in firewall_rules.items()
+                k: v for k, v in self.firewall_rules.items()
                 if k in code and v in [str(node.value), "*"]
             }
             if not related_rules:
@@ -163,7 +166,7 @@ class Visitor(ast.NodeVisitor):
         def __generate_true():
             code = ['I01', '\\x88']
             related_rules = {
-                k: v for k, v in firewall_rules.items()
+                k: v for k, v in self.firewall_rules.items()
                 if k in code and v in ["*"]
             }
             if not related_rules:
@@ -193,7 +196,7 @@ class Visitor(ast.NodeVisitor):
         def __generate_false():
             code = ['I00', '\\x89']
             related_rules = {
-                k: v for k, v in firewall_rules.items()
+                k: v for k, v in self.firewall_rules.items()
                 if k in code and v in ["*"]
             }
             if not related_rules:
@@ -392,7 +395,7 @@ class Visitor(ast.NodeVisitor):
 
         code = ['R', 'o', 'i']
         related_rules = {
-            k: v for k, v in firewall_rules.items()
+            k: v for k, v in self.firewall_rules.items()
             if k in code and v in ["*"]
         }
         if not related_rules:
@@ -425,7 +428,7 @@ class Visitor(ast.NodeVisitor):
         # MUST raise an Error
         # eg: import os
         self.code = put_color("\n".join(
-            source_code.split('\n')
+            self.source_code.split('\n')
             [node.lineno-1: node.end_lineno]
         ), "white")
 
@@ -506,7 +509,7 @@ class Visitor(ast.NodeVisitor):
             )
 
         self.code = put_color("\n".join(
-            source_code.split('\n')
+            self.source_code.split('\n')
             [node.lineno-1: node.end_lineno]
         ), "white")
         _generate_opcode()
@@ -517,27 +520,55 @@ class Visitor(ast.NodeVisitor):
             self.final_opcode += self._flat(node)
 
         self.code = put_color("\n".join(
-            source_code.split('\n')
+            self.source_code.split('\n')
             [node.lineno-1:node.end_lineno]
         ), "white")
         _generate_opcode()
 
 
-Init()
+class API:
+    def __init__(self, source_code, firewall_rules={}, optimized=True, transfer=lambda x: x):
+        self.source_code = source_code
+        self.root = ast.parse(self.source_code)
+        self.firewall_rules = firewall_rules
+        self.optimized = optimized
+        self.transfer = transfer
+
+    def _generate(self):
+        visitor = Visitor(
+            self.source_code, self.firewall_rules
+        )
+        visitor.visit(self.root)
+        visitor.souse()
+        return visitor
+
+    def generate(self):
+        visitor = Visitor(
+            self.source_code,
+            self.firewall_rules,
+        )
+        visitor.visit(self.root)
+        visitor.souse()
+
+        result = visitor.result
+
+        if self.optimized:
+            result = visitor.optimize()
+
+        if isinstance(self.transfer, list):
+            for func in self.transfer:
+                result = func(result)
+
+            return result
+
+        if isinstance(self.transfer, str):
+            self.transfer = transfer_funcs(self.transfer)
+
+        return self.transfer(result)
+
+
 VERSION = '3.0'
-FUNC_NAME = {
-    "b64": "base64_encode",
-    "base64": "base64_encode",
-    "base64encode": "base64_encode",
-
-    "hex": "hex_encode",
-    "hexencode": "hex_encode",
-
-    "url": "url_decode",
-    "urldecode": "url_decode",
-}
-
-print(
+LOGO = (
     f'''
   ██████  ▒█████   █    ██   ██████ ▓█████ 
 ▒██    ▒ ▒██▒  ██▒ ██  ▓██▒▒██    ▒ ▓█   ▀ 
@@ -557,127 +588,137 @@ print(
     .replace('▄', put_color('▄', "yellow"))
 )
 
-parser = argparse.ArgumentParser(description=f'Version: {VERSION}; Running in Py3.x')
-parser.add_argument(
-    "--check", action="store_true",
-    help="run pickle.loads() to test opcode"
-)
-parser.add_argument(
-    "--no-optimize", action="store_false",
-    help="do NOT optimize opcode"
-)
-group = parser.add_mutually_exclusive_group(required=True)
-group.add_argument("-f", "--filename", help=".py source code filename")
-group.add_argument(
-    "--run-test", action="store_true",
-    help="run test with test/*.py (not startswith `N-`)"
-)
-parser.add_argument(
-    "-p", "--bypass", default=False,
-    help="try bypass limitation"
-)
-parser.add_argument(
-    "-t", "--transfer", default=None,
-    help=f"transfer result with: { {i for i in FUNC_NAME.values()} }"
-)
+FUNC_NAME = {
+    "b64": "base64_encode",
+    "base64": "base64_encode",
+    "base64encode": "base64_encode",
 
-args = parser.parse_args()
+    "hex": "hex_encode",
+    "hexencode": "hex_encode",
 
-need_check = args.check
-need_optimize = args.no_optimize
-run_test = args.run_test
-transfer = args.transfer
-transfer_func = transfer_funcs(transfer)
+    "url": "url_decode",
+    "urldecode": "url_decode",
+}
 
-if run_test:
-    # 代码质量测试模式下
-    # 不优化 opcode、不执行 opcode、不 bypass
-    need_optimize = False
-    need_check = False
-    bypass = False
-    directory = "./test/"
-    filenames = sorted([
-        directory+i for i in list(os.walk(directory))[0][2]
-        if not i.startswith("N-")
-    ])
-else:
-    filenames = [args.filename]
+if __name__ == '__main__':
+    Init()
+    print(LOGO)
 
-print(f'[*] need check:        {put_color(need_check, ["gray", "green"][int(need_check)])}')
-print(f'[*] need optimize:     {put_color(need_optimize, ["gray", "green"][int(need_optimize)])}')
+    parser = argparse.ArgumentParser(description=f'Version: {VERSION}; Running in Py3.x')
+    parser.add_argument(
+        "--check", action="store_true",
+        help="run pickle.loads() to test opcode"
+    )
+    parser.add_argument(
+        "--no-optimize", action="store_false",
+        help="do NOT optimize opcode"
+    )
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("-f", "--filename", help=".py source code filename")
+    group.add_argument(
+        "--run-test", action="store_true",
+        help="run test with test/*.py (not startswith `N-`)"
+    )
+    parser.add_argument(
+        "-p", "--bypass", default=False,
+        help="try bypass limitation"
+    )
+    parser.add_argument(
+        "-t", "--transfer", default=None,
+        help=f"transfer result with: { {i for i in FUNC_NAME.values()} }"
+    )
 
-firewall_rules = {}
-bypass = False
-if args.bypass:
-    try:
-        firewalls = json.load(open(args.bypass))
-    except Exception as e:
-        print("\n[!]", put_color(f"{args.bypass} has invalid bypass rules: {e}\n", 'yellow'))
+    args = parser.parse_args()
+
+    need_check = args.check
+    need_optimize = args.no_optimize
+    run_test = args.run_test
+    transfer = args.transfer
+    transfer_func = transfer_funcs(transfer)
+
+    if run_test:
+        # 代码质量测试模式下
+        # 不优化 opcode、不执行 opcode、不 bypass
+        need_optimize = False
+        need_check = False
+        bypass = False
+        directory = "./test/"
+        filenames = sorted([
+            directory+i for i in list(os.walk(directory))[0][2]
+            if not i.startswith("N-")
+        ])
     else:
-        rule_type = firewalls.get("type", None)
-        if rule_type not in ["black", "white"]:
-            print("\n[!]", put_color(f'{args.bypass} must contains a json key: `type` in `["black", "white"]`\n', "yellow"))
-        else:
-            firewall_rules = firewalls.get('rules', {})
+        filenames = [args.filename]
 
+    print(f'[*] need check:        {put_color(need_check, ["gray", "green"][int(need_check)])}')
+    print(f'[*] need optimize:     {put_color(need_optimize, ["gray", "green"][int(need_optimize)])}')
+
+    firewall_rules = {}
+    bypass = False
+    if args.bypass:
+        try:
+            firewalls = json.load(open(args.bypass))
+        except Exception as e:
+            print("\n[!]", put_color(f"{args.bypass} has invalid bypass rules: {e}\n", 'yellow'))
+        else:
             if not firewall_rules:
                 print("\n[!]", put_color(f"{args.bypass} has no rules\n", 'yellow'))
             else:
                 bypass = True
 
-print(f'[*] try bypass:        {put_color(args.bypass, ["gray", "cyan"][int(bypass)])}')
-print(f'[*] transfer function: {put_color(transfer, ["blue", "gray"][bool(bypass)])}\n')
-for filename in filenames:
-    def tip(c): return f'[+] input: {put_color(filename, c)}'
-    try:
+    print(f'[*] try bypass:        {put_color(args.bypass, ["gray", "cyan"][int(bypass)])}')
+    print(f'[*] transfer function: {put_color(transfer, ["blue", "gray"][bool(bypass)])}\n')
+    for filename in filenames:
+        def tip(c): return f'[+] input: {put_color(filename, c)}'
+
         source_code = open(filename).read()
-        root = ast.parse(source_code)
-        visitor = Visitor()
-        visitor.visit(root)
-        visitor.souse()
-    except Exception:
-        print(tip("red"), end="\n\n")
-        raise
-    else:
-        if run_test:
-            answer = [
-                i.replace("# ", "").strip()
-                for i in open(filename).readlines() if i.strip()
-            ][-1]
-            correct = answer == str(visitor.result)
-            if correct:
-                print(tip("green"))
-                continue
-            else:
-                print(tip("yellow"))
+        try:
+            visitor = API(
+                source_code, firewall_rules, need_optimize,
+            )._generate()
+        except Exception:
+            print(tip("red"), end="\n\n")
+            raise
         else:
-            print(tip("cyan"))
+            if run_test:
+                answer = [
+                    i.replace("# ", "").strip()
+                    for i in source_code.split('\n') if i.strip()
+                ][-1]
+                correct = answer == str(visitor.result)
+                if correct:
+                    print(tip("green"))
+                    continue
+                else:
+                    print(tip("yellow"))
+            else:
+                print(tip("cyan"))
 
-    print(f'  [-] raw opcode:         {put_color(visitor.result, "green")}')
+        print(f'  [-] raw opcode:         {put_color(visitor.result, "green")}')
 
-    if need_optimize:
-        print(f'  [-] optimized opcode:   {put_color(visitor.optimize(), "green")}')
+        if need_optimize:
+            print(f'  [-] optimized opcode:   {put_color(visitor.optimize(), "green")}')
 
-        if transfer:
-            print(f'  [-] transfered opcode:  {put_color(transfer_func(visitor.optimize()), "green")}')
+            if transfer:
+                print(f'  [-] transfered opcode:  {put_color(transfer_func(visitor.optimize()), "green")}')
 
-    elif transfer:
-        print(f'  [-] transfered opcode:  {put_color(transfer_func(visitor.result), "green")}')
+        elif transfer:
+            print(f'  [-] transfered opcode:  {put_color(transfer_func(visitor.result), "green")}')
 
-    if need_check:
-        print(f'  [-] opcode test result: {put_color(visitor.check(), "white")}')
+        if need_check:
+            print(f'  [-] opcode test result: {put_color(visitor.check(), "white")}')
 
-    if run_test:
-        loc = [
-            (i, j)
-            for i, j in zip(enumerate(str(visitor.result)), enumerate(answer))
-            if i[1] != j[1]
-        ][0][0][0]
-        answer = (
-            put_color(answer[:loc], "green") +
-            put_color(answer[loc:-1], "yellow") +
-            put_color(answer[-1], "green")
-        )
-        print(f'  [-] answer for test:    {answer}')
+        if run_test:
+            loc = [
+                (i, j)
+                for i, j in zip(enumerate(str(visitor.result)), enumerate(answer))
+                if i[1] != j[1]
+            ][0][0][0]
+            answer = (
+                put_color(answer[:loc], "green") +
+                put_color(answer[loc:-1], "yellow") +
+                put_color(answer[-1], "green")
+            )
+            print(f'  [-] answer for test:    {answer}')
 
-print("\n[*] done")
+    print("\n[*] done")
