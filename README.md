@@ -5,7 +5,6 @@ A tool for converting Python source code to opcode(pickle)
 
 <img src="/pics/help.png" width="600">
 
-
 ## ## usage
 
 `./test/` has some example codes for souse.py. The filename starts with `N` is NOT supported yet.
@@ -47,7 +46,12 @@ supported:
 
 ## ## TODO
 - [x] support for nested expressions
-- [x] basic bypass support
+- [x] opcode bypass supported
+	- [x] auto bypass basic limitation（`V`、`S`、`I`、...）
+	- [x] auto bypass complex limitation（`R`、`o`、`i`）
+- [x] value bypass supported
+	- [x] number
+
 
 ## ## Others
 <img src="https://clean-1252075454.cos.ap-nanjing.myqcloud.com/20200528120800990.png" width="500">
