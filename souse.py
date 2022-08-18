@@ -24,12 +24,13 @@ def put_color(string, color, bold=True):
 
 
 def transfer_funcs(func_name):
+    if not func_name: return lambda x: x
     func = {
         'base64_encode': __import__('base64').b64encode,
         'hex_encode': functools.partial(__import__('codecs').encode, encoding="hex"),
         'url_decode': __import__('urllib.parse', fromlist=[""]).quote_plus,
-    }.get(FUNC_NAME.get(func_name, func_name), None)
-    if func is None:
+    }.get(FUNC_NAME.get(func_name, func_name), 'unknown')
+    if func == 'unknown':
         raise RuntimeError(put_color(
             f"no such transfer function: {put_color(func_name, 'blue')}",
             "yellow"
@@ -527,7 +528,7 @@ class Visitor(ast.NodeVisitor):
 
 
 class API:
-    def __init__(self, source_code, firewall_rules={}, optimized=True, transfer=lambda x: x):
+    def __init__(self, source_code, firewall_rules={}, optimized=True, transfer=''):
         self.source_code = source_code
         self.root = ast.parse(self.source_code)
         self.firewall_rules = firewall_rules
@@ -561,13 +562,13 @@ class API:
 
             return result
 
-        if isinstance(self.transfer, str):
+        if self.transfer is None or isinstance(self.transfer, str):
             self.transfer = transfer_funcs(self.transfer)
 
         return self.transfer(result)
 
 
-VERSION = '3.1'
+VERSION = '3.2'
 LOGO = (
     f'''
   ██████  ▒█████   █    ██   ██████ ▓█████ 
@@ -657,7 +658,7 @@ if __name__ == '__main__':
     bypass = False
     if args.bypass:
         try:
-            firewalls = json.load(open(args.bypass))
+            firewall_rules = json.load(open(args.bypass))
         except Exception as e:
             print("\n[!]", put_color(f"{args.bypass} has invalid bypass rules: {e}\n", 'yellow'))
         else:
