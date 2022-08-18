@@ -3,7 +3,7 @@ A tool for converting Python source code to opcode(pickle)
 
 ## 1. help
 
-<img src="/pics/help.png" width="600">
+<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/help.png" width="600">
 
 ## 2. usage
 ### 2.1 CLI
@@ -13,27 +13,27 @@ A tool for converting Python source code to opcode(pickle)
 
 source code:
 
-<img src="/pics/eg-1.png" width="300">
+<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/eg-1.png" width="300">
 
 opcode:
 
-<img src="/pics/eg-1-s.png" width="600">
+<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/eg-1-s.png" width="600">
 
 #### 2.1.2 case 2
 
 source code:
 
-<img src="/pics/eg-2.png" width="300">
+<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/eg-2.png" width="300">
 
 opcode:
 
-<img src="/pics/eg-2-s.png" width="600">
+<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/eg-2-s.png" width="600">
 
 #### 2.1.3 case 3
 
 transfer opcode:
 
-<img src="/pics/eg-3.png" width="600">
+<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/eg-3.png" width="600">
 
 supported:
 - [x] base64_encode
@@ -42,7 +42,7 @@ supported:
 
 #### 2.1.4 test code
 
-<img src="/pics/test.png" width="400">
+<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/test.png" width="400">
 
 ### 2.2 API
 example:
@@ -87,7 +87,7 @@ Out[9]: 0
 - [x] value bypass supported
 	- [x] number
 - [x] API
-- [ ] `pip install` supported
+- [x] `pip install` supported
 
 ## ## Others
 <img src="https://clean-1252075454.cos.ap-nanjing.myqcloud.com/20200528120800990.png" width="500">

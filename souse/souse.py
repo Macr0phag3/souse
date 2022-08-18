@@ -1,4 +1,5 @@
 import os
+import sys
 import ast
 import json
 import pickle
@@ -24,7 +25,8 @@ def put_color(string, color, bold=True):
 
 
 def transfer_funcs(func_name):
-    if not func_name: return lambda x: x
+    if not func_name:
+        return lambda x: x
     func = {
         'base64_encode': __import__('base64').b64encode,
         'hex_encode': functools.partial(__import__('codecs').encode, encoding="hex"),
@@ -52,7 +54,15 @@ class Visitor(ast.NodeVisitor):
         self.result = self.final_opcode+b'.'
 
     def check(self):
-        return pickle.loads(self.result)
+        with open('.souse-result.tmp', 'w') as fw:
+            fw.write(
+                'import pickle\n'
+                f'print(pickle.loads({repr(self.result)}), end="")\n'
+            )
+
+        return os.popen(
+            f"{sys.executable} .souse-result.tmp"
+        ).read()
 
     def optimize(self):
         optimized = []
@@ -568,40 +578,7 @@ class API:
         return self.transfer(result)
 
 
-VERSION = '3.2'
-LOGO = (
-    f'''
-  ██████  ▒█████   █    ██   ██████ ▓█████ 
-▒██    ▒ ▒██▒  ██▒ ██  ▓██▒▒██    ▒ ▓█   ▀ 
-░ ▓██▄   ▒██░  ██▒▓██  ▒██░░ ▓██▄   ▒███   
-  ▒   ██▒▒██   ██░▓▓█  ░██░  ▒   ██▒▒▓█  ▄ 
-▒██████▒▒░ ████▓▒░▒▒█████▓ ▒██████▒▒░▒████▒
-▒ ▒▓▒ ▒ ░░ ▒░▒░▒░ ░▒▓▒ ▒ ▒ ▒ ▒▓▒ ▒ ░░░ ▒░ ░
-░ ░▒  ░ ░  ░ ▒ ▒░ ░░▒░ ░ ░ ░ ░▒  ░ ░ ░ ░  ░
-░  ░  ░  ░ ░ ░ ▒   ░░░ ░ ░ ░  ░  ░     ░   
-      ░      ░ ░     ░           ░     ░  ░ v{Fore.GREEN}{VERSION}{Style.RESET_ALL}
-'''
-    .replace('█', put_color('█', "yellow"))
-    .replace('▒', put_color('▒', "yellow", bold=False))
-    .replace('▓', put_color('▓', "yellow"))
-    .replace('░', put_color('░', "white", bold=False))
-    .replace('▀', put_color('▀', "yellow"))
-    .replace('▄', put_color('▄', "yellow"))
-)
-
-FUNC_NAME = {
-    "b64": "base64_encode",
-    "base64": "base64_encode",
-    "base64encode": "base64_encode",
-
-    "hex": "hex_encode",
-    "hexencode": "hex_encode",
-
-    "url": "url_decode",
-    "urldecode": "url_decode",
-}
-
-if __name__ == '__main__':
+def cli():
     Init()
     print(LOGO)
 
@@ -643,9 +620,11 @@ if __name__ == '__main__':
         need_optimize = False
         need_check = False
         bypass = False
-        directory = "./test/"
+        directory = os.path.join(
+            *list(os.path.split(__file__)[:-1])+["test"],
+        )
         filenames = sorted([
-            directory+i for i in list(os.walk(directory))[0][2]
+            os.path.join(directory, i) for i in list(os.walk(directory))[0][2]
             if not i.startswith("N-")
         ])
     else:
@@ -723,3 +702,40 @@ if __name__ == '__main__':
             print(f'  [-] answer for test:    {answer}')
 
     print("\n[*] done")
+
+
+VERSION = '3.2'
+LOGO = (
+    f'''
+  ██████  ▒█████   █    ██   ██████ ▓█████ 
+▒██    ▒ ▒██▒  ██▒ ██  ▓██▒▒██    ▒ ▓█   ▀ 
+░ ▓██▄   ▒██░  ██▒▓██  ▒██░░ ▓██▄   ▒███   
+  ▒   ██▒▒██   ██░▓▓█  ░██░  ▒   ██▒▒▓█  ▄ 
+▒██████▒▒░ ████▓▒░▒▒█████▓ ▒██████▒▒░▒████▒
+▒ ▒▓▒ ▒ ░░ ▒░▒░▒░ ░▒▓▒ ▒ ▒ ▒ ▒▓▒ ▒ ░░░ ▒░ ░
+░ ░▒  ░ ░  ░ ▒ ▒░ ░░▒░ ░ ░ ░ ░▒  ░ ░ ░ ░  ░
+░  ░  ░  ░ ░ ░ ▒   ░░░ ░ ░ ░  ░  ░     ░   
+      ░      ░ ░     ░           ░     ░  ░ v{Fore.GREEN}{VERSION}{Style.RESET_ALL}
+'''
+    .replace('█', put_color('█', "yellow"))
+    .replace('▒', put_color('▒', "yellow", bold=False))
+    .replace('▓', put_color('▓', "yellow"))
+    .replace('░', put_color('░', "white", bold=False))
+    .replace('▀', put_color('▀', "yellow"))
+    .replace('▄', put_color('▄', "yellow"))
+)
+
+FUNC_NAME = {
+    "b64": "base64_encode",
+    "base64": "base64_encode",
+    "base64encode": "base64_encode",
+
+    "hex": "hex_encode",
+    "hexencode": "hex_encode",
+
+    "url": "url_decode",
+    "urldecode": "url_decode",
+}
+
+if __name__ == '__main__':
+    cli()

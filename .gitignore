@@ -6,3 +6,8 @@ test-source-code.py
 *-dev.py
 workspace
 tmp-*.py
+dist/
+*.egg-info/
+build/
+.souse-result.tmp
+.eggs
