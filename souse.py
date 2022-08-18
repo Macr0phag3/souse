@@ -567,7 +567,7 @@ class API:
         return self.transfer(result)
 
 
-VERSION = '3.0'
+VERSION = '3.1'
 LOGO = (
     f'''
   ██████  ▒█████   █    ██   ██████ ▓█████ 
