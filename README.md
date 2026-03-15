@@ -1,13 +1,25 @@
 # souse
 A tool for converting Python source code to opcode(pickle)
 
+[中文版](./README_CN.md)
+
 ## 1. help
 
 <img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/help.png" width="600">
 
+## 2. Key Features
+
+- **🚀 Intelligent Reconstruction**: Automatically reconstructs non-pickleable Python source code into fully compatible opcode sequences.
+- **✨ Automated Builtins**: Built-in functions like `open`, `eval`, and `getattr` are recognized automatically—no manual import needed.
+- **🛡️ Advanced Bypass**: Auto bypass complex limitations (`R`, `o`, `i`, ...)
+- **⚡ Stealthy Optimization**: Automatically optimizes generated opcodes using `pickletools` for minimal size and maximum stealth.
+- **📦 Multi-Functional Transfer**: Flexible encoding support (Base64, Hex, URL) and custom transformation sequences.
+- **📝 Precise Debugging**: Pinpoints errors with full source code context and syntax highlighting.
+- **💡 API Support**: Convert Python source code to opcode(pickle) via API.
+
 ## 2. usage
 ### 2.1 CLI
-`./test/` has some example codes for souse.py. The filename starts with `N` is NOT supported yet.
+`./test/` has some example codes for souse.py.
 
 #### 2.1.1 case 1
 
@@ -92,6 +104,9 @@ Out[9]: 0
 	- [x] number
 - [x] API
 - [x] `pip install` supported
+- [x] Contextual source error reporting
+- [x] Intelligent Subscript Downgrade (`u` -> `__setitem__`)
+- [x] Automated Builtin recognition
 
 ## ## Others
 <img src="https://clean-1252075454.cos.ap-nanjing.myqcloud.com/20200528120800990.png" width="500">
