@@ -538,10 +538,10 @@ class Visitor(ast.NodeVisitor):
 
 
 class API:
-    def __init__(self, source_code, firewall_rules={}, optimized=True, transfer=''):
+    def __init__(self, source_code, firewall_rules=None, optimized=True, transfer=''):
         self.source_code = source_code
         self.root = ast.parse(self.source_code)
-        self.firewall_rules = firewall_rules
+        self.firewall_rules = firewall_rules or {}
         self.optimized = optimized
         self.transfer = transfer
 
