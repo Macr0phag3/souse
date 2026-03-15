@@ -7,7 +7,7 @@ import struct
 import argparse
 import functools
 import pickletools
-from typing import Any, Dict, List, Optional, Union, Callable, Tuple
+from typing import Any, Dict, List, Optional, Union, Callable, Tuple, cast
 
 from colorama import Fore, Style, init as Init
 
@@ -28,18 +28,24 @@ def put_color(string: Any, color: str, bold: bool = True) -> str:
 def transfer_funcs(func_name: Optional[str]) -> Callable:
     if not func_name:
         return lambda x: x
+    
+    import base64
+    import codecs
+    import urllib.parse
+
     func = {
-        'base64_encode': __import__('base64').b64encode,
-        'hex_encode': functools.partial(__import__('codecs').encode, encoding="hex"),
-        'url_decode': __import__('urllib.parse', fromlist=[""]).quote_plus,
-    }.get(FUNC_NAME.get(func_name, func_name), 'unknown')
-    if func == 'unknown':
+        'base64_encode': base64.b64encode,
+        'hex_encode': functools.partial(codecs.encode, encoding="hex"),
+        'url_decode': urllib.parse.quote_plus,
+    }.get(FUNC_NAME.get(func_name, func_name))
+    
+    if func is None:
         raise RuntimeError(put_color(
             f"no such transfer function: {put_color(func_name, 'blue')}",
             "yellow"
         ))
 
-    return func
+    return cast(Callable, func)
 
 
 class Visitor(ast.NodeVisitor):
@@ -78,7 +84,7 @@ class Visitor(ast.NodeVisitor):
                 len(optimized) > 2 and
                 optimized[-2].startswith(b"p") and
                 optimized[-1].startswith(b"g") and
-                optimized[-1][1:] == optimized[-2][1:] and
+                optimized[-1].replace(b"g", b"p", 1) == optimized[-2] and
                 memo_g_ids.count(optimized[-1]) == 1
             ):
                 # 优化掉
@@ -237,7 +243,7 @@ class Visitor(ast.NodeVisitor):
                 )
             return f'{bypass_code[0]}\n'
 
-        value_map = {
+        value_map: Dict[Any, Any] = {
             int: __generate_int,
             float: __generate_float,
             str: __generate_str,
@@ -326,11 +332,11 @@ class Visitor(ast.NodeVisitor):
         # 先分析 [] 里面
         if isinstance(node.slice, ast.Index):
             # 兼容 py < 3.9
-            node.slice = node.slice.value
+            node.slice = getattr(node.slice, 'value')
 
         if isinstance(node.slice, ast.Subscript):
             raise RuntimeError(
-                put_color("this nested index is not supported yet: ") +
+                put_color("this nested index is not supported yet: ", "red") +
                 f'{put_color(node.slice.__class__, "cyan")} in {self.code}'
             )
 
@@ -382,7 +388,7 @@ class Visitor(ast.NodeVisitor):
             code, num = list(func_name.strip().decode())
 
             imported_func = [
-                (j[1], i)
+                (cast(str, j[1]), i)
                 for i, j in self.names.items()
                 if j[0] == num and j[1]
             ]
@@ -441,10 +447,15 @@ class Visitor(ast.NodeVisitor):
     def visit_Import(self, node: ast.Import) -> None:
         # MUST raise an Error
         # eg: import os
-        self.code = put_color("\n".join(
-            self.source_code.split('\n')
-            [node.lineno-1: node.end_lineno]
-        ), "white")
+        start = node.lineno - 1
+        end = getattr(node, 'end_lineno', None)
+        end = end if end is not None else node.lineno
+        all_lines = self.source_code.split('\n')
+        selected: List[str] = []
+        for i in range(start, end):
+            if i < len(all_lines):
+                selected.append(all_lines[i])
+        self.code = put_color("\n".join(selected), "white")
 
         for _name in node.names:
             name = _name.name
@@ -484,7 +495,8 @@ class Visitor(ast.NodeVisitor):
             # 先分析等号左边
             if isinstance(node.targets[0], ast.Name):
                 # eg: a = ...
-                name = node.targets[0].id
+                target = cast(ast.Name, node.targets[0])
+                name = target.id
                 assign_opcode = b'{right_opcode}p{self.memo_id}\n' \
                                 .replace(b'{self.memo_id}', str(self.memo_id).encode("utf-8"))
 
@@ -493,7 +505,8 @@ class Visitor(ast.NodeVisitor):
 
             elif isinstance(node.targets[0], ast.Attribute):
                 # 等号左边有 . 出现
-                left_opcode, attr = self._parse_attribute(node.targets[0])
+                target_attr = cast(ast.Attribute, node.targets[0])
+                left_opcode, attr = self._parse_attribute(target_attr)
                 assign_opcode = b'{left_opcode}(N}V{attr}\n{right_opcode}stb' \
                                 .replace(b'{left_opcode}', left_opcode) \
                                 .replace(b'{attr}', attr)
@@ -522,9 +535,11 @@ class Visitor(ast.NodeVisitor):
                 b"{right_opcode}", right_opcode
             )
 
+        start = node.lineno - 1
+        end = getattr(node, 'end_lineno', None)
+        end = end if end is not None else node.lineno
         self.code = put_color("\n".join(
-            self.source_code.split('\n')
-            [node.lineno-1: node.end_lineno]
+            self.source_code.split('\n')[start:end]  # type: ignore
         ), "white")
         _generate_opcode()
 
@@ -533,9 +548,11 @@ class Visitor(ast.NodeVisitor):
         def _generate_opcode():
             self.final_opcode += self._flat(node)
 
+        start = node.lineno - 1
+        end = getattr(node, 'end_lineno', None)
+        end = end if end is not None else node.lineno
         self.code = put_color("\n".join(
-            self.source_code.split('\n')
-            [node.lineno-1:node.end_lineno]
+            self.source_code.split('\n')[start:end]  # type: ignore
         ), "white")
         _generate_opcode()
 
@@ -569,16 +586,21 @@ class API:
         if self.optimized:
             result = visitor.optimize()
 
-        if isinstance(self.transfer, list):
-            for func in self.transfer:
+        transfer = self.transfer
+
+        if isinstance(transfer, list):
+            for func in transfer:
                 result = func(result)
 
             return result
 
-        if self.transfer is None or isinstance(self.transfer, str):
-            self.transfer = transfer_funcs(self.transfer)
+        if transfer is None or isinstance(transfer, str):
+            transfer = transfer_funcs(transfer)
+            self.transfer = transfer
 
-        return self.transfer(result)
+        if callable(transfer):
+            return transfer(result)
+        return result
 
 
 def cli() -> None:
@@ -624,7 +646,7 @@ def cli() -> None:
         need_check = False
         bypass = False
         directory = os.path.join(
-            *list(os.path.split(__file__)[:-1])+["test"],
+            os.path.dirname(__file__), "test"
         )
         filenames = sorted([
             os.path.join(directory, i) for i in list(os.walk(directory))[0][2]
@@ -698,9 +720,7 @@ def cli() -> None:
                 if i[1] != j[1]
             ][0][0][0]
             answer = (
-                put_color(answer[:loc], "green") +
-                put_color(answer[loc:-1], "yellow") +
-                put_color(answer[-1], "green")
+                put_color(answer[:loc], "green") + put_color(answer[loc:-1], "yellow") + put_color(answer[-1], "green") # type: ignore
             )
             print(f'  [-] answer for test:    {answer}')
 
