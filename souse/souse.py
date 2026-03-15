@@ -7,11 +7,12 @@ import struct
 import argparse
 import functools
 import pickletools
+from typing import Any, Dict, List, Optional, Union, Callable, Tuple
 
 from colorama import Fore, Style, init as Init
 
 
-def put_color(string, color, bold=True):
+def put_color(string: Any, color: str, bold: bool = True) -> str:
     '''
     give me some color to see :P
     '''
@@ -24,7 +25,7 @@ def put_color(string, color, bold=True):
     return f'{Style.BRIGHT if bold else ""}{COLOR}{str(string)}{Style.RESET_ALL}'
 
 
-def transfer_funcs(func_name):
+def transfer_funcs(func_name: Optional[str]) -> Callable:
     if not func_name:
         return lambda x: x
     func = {
@@ -42,18 +43,20 @@ def transfer_funcs(func_name):
 
 
 class Visitor(ast.NodeVisitor):
-    def __init__(self, source_code, firewall_rules):
-        self.names = {}  # 变量记录
-        self.memo_id = 0  # memo 的顶层 id
-        self.firewall_rules = firewall_rules
-        self.source_code = source_code
+    def __init__(self, source_code: str, firewall_rules: Dict[str, str]) -> None:
+        self.names: Dict[str, List[Optional[str]]] = {}  # 变量记录
+        self.memo_id: int = 0  # memo 的顶层 id
+        self.firewall_rules: Dict[str, str] = firewall_rules
+        self.source_code: str = source_code
 
-        self.final_opcode = b''
+        self.final_opcode: bytes = b''
+        self.code: str = ""
+        self.result: bytes = b""
 
-    def souse(self):
+    def souse(self) -> None:
         self.result = self.final_opcode+b'.'
 
-    def check(self):
+    def check(self) -> str:
         with open('.souse-result.tmp', 'w') as fw:
             fw.write(
                 'import pickle\n'
@@ -64,8 +67,8 @@ class Visitor(ast.NodeVisitor):
             f"{sys.executable} .souse-result.tmp"
         ).read()
 
-    def optimize(self):
-        optimized = []
+    def optimize(self) -> bytes:
+        optimized: List[bytes] = []
         result = pickletools.optimize(self.result).split(b'\n')
         memo_g_ids = [i for i in result if i.startswith(b"g")]
         while result:
@@ -83,10 +86,10 @@ class Visitor(ast.NodeVisitor):
 
         return pickletools.optimize(b'\n'.join(optimized))
 
-    def _flat(self, node):
+    def _flat(self, node: ast.AST) -> Any:
         '''递归处理基础的语句
         '''
-        _types = {
+        _types: Dict[Any, Any] = {
             ast.Constant: self._parse_constant,
             ast.List: self._parse_list,
             ast.Set: self._parse_set,
@@ -107,7 +110,7 @@ class Visitor(ast.NodeVisitor):
             f'{put_color(node.__class__, "cyan")} in {self.code}'
         )
 
-    def _parse_constant(self, node):
+    def _parse_constant(self, node: ast.Constant) -> Any:
         def __generate_int():
             code = ['I', 'J']
             related_rules = {
@@ -261,7 +264,7 @@ class Visitor(ast.NodeVisitor):
 
         return result
 
-    def _parse_set(self, node):
+    def _parse_set(self, node: ast.Set) -> Any:
         # PVM Protocol 4
         return (
             b'\x8f(' +
@@ -269,28 +272,28 @@ class Visitor(ast.NodeVisitor):
             b'\x90'
         )
 
-    def _parse_list(self, node):
+    def _parse_list(self, node: ast.List) -> Any:
         return (
             b'(' +
             b"".join([self._flat(elt) for elt in node.elts]) +
             b'l'
         )
 
-    def _parse_tuple(self, node):
+    def _parse_tuple(self, node: ast.Tuple) -> Any:
         return (
             b'(' +
             b"".join([self._flat(elt) for elt in node.elts]) +
             b't'
         )
 
-    def _parse_dict(self, node):
+    def _parse_dict(self, node: ast.Dict) -> Any:
         return (
             b'(' +
             b"".join([self._flat(k) + self._flat(v) for k, v in zip(node.keys, node.values)]) +
             b'd'
         )
 
-    def _parse_name(self, node):
+    def _parse_name(self, node: ast.Name) -> Any:
         memo_name = self.names.get(node.id, [None, None])[0]
         if memo_name is None:
             # 说明之前没有定义这个变量
@@ -301,7 +304,7 @@ class Visitor(ast.NodeVisitor):
 
         return f'g{memo_name}\n'.encode('utf-8')
 
-    def _parse_attribute(self, node):
+    def _parse_attribute(self, node: ast.Attribute) -> Any:
         targets = node.value
         attr = node.attr
 
@@ -319,7 +322,7 @@ class Visitor(ast.NodeVisitor):
                 f'{put_color(targets.__class__, "cyan")} in {self.code}'
             )
 
-    def _parse_subscript(self, node):
+    def _parse_subscript(self, node: ast.Subscript) -> Any:
         # 先分析 [] 里面
         if isinstance(node.slice, ast.Index):
             # 兼容 py < 3.9
@@ -337,7 +340,7 @@ class Visitor(ast.NodeVisitor):
         outside_opcode = self._flat(node.value)
         return outside_opcode, inside_opcode
 
-    def _parse_call(self, node):
+    def _parse_call(self, node: ast.Call) -> Any:
         def _normal_generate(node):
             if isinstance(node.func, ast.Name) or isinstance(node.func, ast.Call):
                 opcode = (
@@ -435,7 +438,7 @@ class Visitor(ast.NodeVisitor):
                 'not implemented'
             )
 
-    def visit_Import(self, node):
+    def visit_Import(self, node: ast.Import) -> None:
         # MUST raise an Error
         # eg: import os
         self.code = put_color("\n".join(
@@ -455,7 +458,7 @@ class Visitor(ast.NodeVisitor):
                 " instead!"
             )
 
-    def visit_ImportFrom(self, node):
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         # eg: from os import system
         # eg: from os import system as sys
         # eg: from os import system, popen
@@ -468,7 +471,7 @@ class Visitor(ast.NodeVisitor):
 
         _generate_opcode()
 
-    def visit_Assign(self, node):
+    def visit_Assign(self, node: ast.Assign) -> None:
         # 赋值
         # a = "whoami"
         def _generate_opcode():
@@ -525,7 +528,7 @@ class Visitor(ast.NodeVisitor):
         ), "white")
         _generate_opcode()
 
-    def visit_Call(self, node):
+    def visit_Call(self, node: ast.Call) -> None:
         # 函数调用
         def _generate_opcode():
             self.final_opcode += self._flat(node)
@@ -538,14 +541,14 @@ class Visitor(ast.NodeVisitor):
 
 
 class API:
-    def __init__(self, source_code, firewall_rules=None, optimized=True, transfer=''):
+    def __init__(self, source_code: str, firewall_rules: Optional[Dict[str, str]] = None, optimized: bool = True, transfer: Union[str, Callable[..., Any], List[Callable[..., Any]], None] = '') -> None:
         self.source_code = source_code
         self.root = ast.parse(self.source_code)
         self.firewall_rules = firewall_rules or {}
         self.optimized = optimized
         self.transfer = transfer
 
-    def _generate(self):
+    def _generate(self) -> Visitor:
         visitor = Visitor(
             self.source_code, self.firewall_rules
         )
@@ -553,7 +556,7 @@ class API:
         visitor.souse()
         return visitor
 
-    def generate(self):
+    def generate(self) -> Any:
         visitor = Visitor(
             self.source_code,
             self.firewall_rules,
@@ -578,7 +581,7 @@ class API:
         return self.transfer(result)
 
 
-def cli():
+def cli() -> None:
     Init()
     print(LOGO)
 
