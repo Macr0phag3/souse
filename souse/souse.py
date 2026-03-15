@@ -123,6 +123,23 @@ class Visitor(ast.NodeVisitor):
             return f"getattr({self._to_converted_code(node.value)}, \"{node.attr}\")"
         elif isinstance(node, ast.Name):
             return node.id
+        elif isinstance(node, ast.Tuple):
+            return f"({', '.join([self._to_converted_code(elt) for elt in node.elts])})"
+        elif isinstance(node, ast.List):
+            return f"[{', '.join([self._to_converted_code(elt) for elt in node.elts])}]"
+        elif isinstance(node, ast.Set):
+            return f"{{{', '.join([self._to_converted_code(elt) for elt in node.elts])}}}"
+        elif isinstance(node, ast.Dict):
+            items = []
+            for k, v in zip(node.keys, node.values):
+                if k is None: continue
+                items.append(f"{self._to_converted_code(k)}: {self._to_converted_code(v)}")
+            return f"{{{', '.join(items)}}}"
+        elif isinstance(node, ast.Call):
+            args = ", ".join([self._to_converted_code(arg) for arg in node.args])
+            return f"{self._to_converted_code(node.func)}({args})"
+        elif isinstance(node, ast.Constant):
+            return repr(node.value)
         return ast.unparse(node)
 
     def _parse_constant(self, node: ast.Constant) -> Any:
@@ -497,7 +514,11 @@ class Visitor(ast.NodeVisitor):
                     f"{self.code}, unpack it!"
                 )
 
-            # 先分析等号左边
+            # 1. 分析等号右边 (可能触发导入，先处理以保证顺序)
+            right_opcode = self._flat(node.value)
+            right_str = self._to_converted_code(node.value)
+
+            # 2. 分析等号左边并生成指令
             if isinstance(node.targets[0], ast.Name):
                 # eg: a = ...
                 target_name = cast(ast.Name, node.targets[0])
@@ -506,15 +527,13 @@ class Visitor(ast.NodeVisitor):
                                 .replace(b'{self.memo_id}', str(self.memo_id).encode("utf-8"))
 
                 self.names[name] = [cast(Optional[str], str(self.memo_id)), None]
-                self.converted_code.append(f"{name} = {{right_code}}")
+                self.converted_code.append(f"{name} = {right_str}")
                 self.memo_id += 1
 
             elif isinstance(node.targets[0], ast.Attribute):
-                # 等号左边有 . 出现
                 # eg: os.system = "whoami"
                 target_attr = cast(ast.Attribute, node.targets[0])
                 if isinstance(target_attr.value, ast.Name) and target_attr.value.id in self.lazy_modules:
-                    # 1. 如果已经 import 了，直接通过 import 获取
                     module_name = self.lazy_modules[target_attr.value.id]
                     attr_name = target_attr.attr
                     full_name = f"{module_name}.{attr_name}"
@@ -530,10 +549,10 @@ class Visitor(ast.NodeVisitor):
                                     .replace(b'{self.memo_id}', str(self.memo_id).encode("utf-8"))
 
                     self.names[full_name] = [cast(Optional[str], str(self.memo_id)), None]
-                    self.converted_code.append(f"{attr_name} = {{right_code}}")
+                    self.converted_code.append(f"{attr_name} = {right_str}")
                     self.memo_id += 1
                 else:
-                    # 2. 否则就用 getattr(obj, attr)
+                    # 否则就用 getattr(obj, attr)
                     left_opcode = self._flat(target_attr.value)
                     left_str = self._to_converted_code(target_attr.value)
                     attr_name = target_attr.attr
@@ -549,7 +568,7 @@ class Visitor(ast.NodeVisitor):
                         assign_opcode = b'{left_opcode}(N}V{attr}\n{right_opcode}stb' \
                                         .replace(b'{left_opcode}', left_opcode) \
                                         .replace(b'{attr}', attr_name.encode())
-                        self.converted_code.append(f"{left_str}.{attr_name} = {{right_code}}")
+                        self.converted_code.append(f"{left_str}.{attr_name} = {right_str}")
                     else:
                         # 使用 setattr(obj, attr, val)
                         if "setattr" not in self.names:
@@ -565,17 +584,15 @@ class Visitor(ast.NodeVisitor):
                                         .replace(b'{left_opcode}', left_opcode) \
                                         .replace(b'{attr}', attr_name.encode())
                         
-                        self.converted_code.append(f"setattr({left_str}, \"{attr_name}\", {{right_code}})")
+                        self.converted_code.append(f"setattr({left_str}, \"{attr_name}\", {right_str})")
 
             elif isinstance(node.targets[0], ast.Subscript):
                 # eg: a["test"] = ...
-                outside_opcode, inside_opcode = self._flat(
-                    node.targets[0]
-                )
+                outside_opcode, inside_opcode = self._flat(node.targets[0])
                 assign_opcode = b'{outside_opcode}({inside_opcode}{right_opcode}u' \
                                 .replace(b'{outside_opcode}', outside_opcode) \
                                 .replace(b'{inside_opcode}', inside_opcode)
-                self.converted_code.append(f"{self._to_converted_code(node.targets[0])} = {{right_code}}")
+                self.converted_code.append(f"{self._to_converted_code(node.targets[0])} = {right_str}")
 
             else:
                 raise RuntimeError(
@@ -583,20 +600,7 @@ class Visitor(ast.NodeVisitor):
                     f"{put_color(node.targets[0].__class__, 'cyan')} in the left part of {self.code}"
                 )
 
-            # 再分析等号右边
-            # eg: ... = a -> isinstance(node.value, ast.Name)
-            # eg: ... = 1 -> isinstance(node.value, ast.Constant)
-            # eg: a = builtins.globals() -> isinstance(node.value, ast.Call)
-            right_opcode = self._flat(node.value)
-            
-            # 更新 converted_code 中的右值占位符
-            right_code = self._to_converted_code(node.value)
-            if self.converted_code and "{right_code}" in self.converted_code[-1]:
-                self.converted_code[-1] = self.converted_code[-1].format(right_code=right_code)
-
-            self.final_opcode += assign_opcode.replace(
-                b"{right_opcode}", right_opcode
-            )
+            self.final_opcode += assign_opcode.replace(b"{right_opcode}", right_opcode)
 
         start = node.lineno - 1
         end = getattr(node, 'end_lineno', None)
