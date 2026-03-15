@@ -127,6 +127,16 @@ class Visitor(ast.NodeVisitor):
             self.memo_id += 1
         return cast(str, self.names[alias][0])
 
+    def _parse_unary_op(self, node: ast.UnaryOp) -> bytes:
+        if isinstance(node.op, ast.USub) and isinstance(node.operand, ast.Constant) and isinstance(node.operand.value, (int, float)):
+            # 简单的负数转换
+            value = -cast(ast.Constant, node.operand).value
+            new_node = ast.Constant(value=value)
+            return self._parse_constant(new_node)
+        
+        self._error(node, f"this unary op is not supported yet: {node.op.__class__.__name__}")
+        return b""
+
     def _get_rule_key(self, op: bytes) -> str:
         mapping = {
             Opcodes.BINTRUE: "\\x88",
@@ -222,6 +232,8 @@ class Visitor(ast.NodeVisitor):
             ast.Call: self._parse_call,
             ast.Attribute: self._parse_attribute,
             ast.Subscript: self._parse_subscript,
+            ast.Slice: self._parse_slice,
+            ast.UnaryOp: self._parse_unary_op,
         }
 
         for _type in _types:
@@ -261,8 +273,23 @@ class Visitor(ast.NodeVisitor):
         elif isinstance(node, ast.Call):
             args = ", ".join([self._to_converted_code(arg) for arg in node.args])
             return f"{self._to_converted_code(node.func)}({args})"
+        elif isinstance(node, ast.Slice):
+            lower = self._to_converted_code(cast(ast.AST, node.lower)) if node.lower else "None"
+            upper = self._to_converted_code(cast(ast.AST, node.upper)) if node.upper else "None"
+            step = self._to_converted_code(cast(ast.AST, node.step)) if node.step else "None"
+            return f"slice({lower}, {upper}, {step})"
         elif isinstance(node, ast.Constant):
             return repr(node.value)
+        elif isinstance(node, ast.UnaryOp):
+            operand = self._to_converted_code(node.operand)
+            if isinstance(node.op, ast.USub):
+                return f"-{operand}"
+            elif isinstance(node.op, ast.UAdd):
+                return f"+{operand}"
+            elif isinstance(node.op, ast.Not):
+                return f"not {operand}"
+            elif isinstance(node.op, ast.Invert):
+                return f"~{operand}"
         return ast.unparse(node)
 
     def _parse_constant(self, node: ast.Constant) -> bytes:
@@ -387,6 +414,18 @@ class Visitor(ast.NodeVisitor):
         self.has_transformation = True
         obj_opcode = self._flat(targets)
         return Opcodes.GET + f'{getattr_id}\n'.encode() + Opcodes.MARK + obj_opcode + Opcodes.STRING + f'{attr}\n'.encode() + Opcodes.TUPLE + Opcodes.REDUCE
+
+    def _parse_slice(self, node: ast.Slice) -> bytes:
+        slice_id = self._ensure_builtins("slice")
+        self.has_transformation = True
+        
+        lower = self._flat(cast(ast.AST, node.lower)) if node.lower else Opcodes.NONE
+        upper = self._flat(cast(ast.AST, node.upper)) if node.upper else Opcodes.NONE
+        step = self._flat(cast(ast.AST, node.step)) if node.step else Opcodes.NONE
+
+        return Opcodes.GET + f'{slice_id}\n'.encode() + \
+               Opcodes.MARK + lower + upper + step + \
+               Opcodes.TUPLE + Opcodes.REDUCE
 
     def _parse_subscript(self, node: ast.Subscript) -> bytes:
         # 加载模式: obj[key] -> getattr(obj, "__getitem__")(key)
