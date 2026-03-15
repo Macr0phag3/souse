@@ -9,7 +9,7 @@ import functools
 import pickletools
 from typing import Any, Dict, List, Optional, Union, Callable, Tuple, cast
 
-from colorama import Fore, Style, init as Init
+from colorama import Fore, Style, init as Init # type: ignore
 
 
 def put_color(string: Any, color: str, bold: bool = True) -> str:
@@ -57,6 +57,7 @@ class Visitor(ast.NodeVisitor):
         self.code: str = ""
         self.result: bytes = b""
         self.converted_code: List[str] = []
+        self.has_transformation: bool = False
 
     def souse(self) -> None:
         self.result = self.final_opcode+b'.'
@@ -114,6 +115,15 @@ class Visitor(ast.NodeVisitor):
             put_color("this struct is not supported yet: ", "red") +
             f'{put_color(node.__class__, "cyan")} in {self.code}'
         )
+
+    def _to_converted_code(self, node: ast.AST) -> str:
+        if isinstance(node, ast.Attribute):
+            if isinstance(node.value, ast.Name) and node.value.id in self.lazy_modules:
+                return node.attr
+            return f"getattr({self._to_converted_code(node.value)}, \"{node.attr}\")"
+        elif isinstance(node, ast.Name):
+            return node.id
+        return ast.unparse(node)
 
     def _parse_constant(self, node: ast.Constant) -> Any:
         def __generate_int():
@@ -323,6 +333,7 @@ class Visitor(ast.NodeVisitor):
                     self.final_opcode += f'c{module_name}\n{attr}\np{self.memo_id}\n'.encode('utf-8')
                     self.converted_code.append(f"from {module_name} import {attr}")
                     self.memo_id += 1
+                    self.has_transformation = True
                 return f'g{cast(str, self.names[full_name][0])}\n'.encode('utf-8')
 
         # 否则就用 getattr(obj, attr)
@@ -332,6 +343,7 @@ class Visitor(ast.NodeVisitor):
             self.converted_code.append("from builtins import getattr")
             self.memo_id += 1
         
+        self.has_transformation = True
         getattr_id = cast(str, self.names["getattr"][0])
         obj_opcode = self._flat(targets)
         return f'g{getattr_id}\n({obj_opcode.decode()}V{attr}\ntR'.encode('utf-8')
@@ -512,6 +524,7 @@ class Visitor(ast.NodeVisitor):
                         self.final_opcode += f'c{module_name}\n{attr_name}\np{self.memo_id}\n'.encode('utf-8')
                         self.converted_code.append(f"from {module_name} import {attr_name}")
                         self.memo_id += 1
+                        self.has_transformation = True
 
                     assign_opcode = b'{right_opcode}p{self.memo_id}\n' \
                                     .replace(b'{self.memo_id}', str(self.memo_id).encode("utf-8"))
@@ -522,6 +535,7 @@ class Visitor(ast.NodeVisitor):
                 else:
                     # 2. 否则就用 getattr(obj, attr)
                     left_opcode = self._flat(target_attr.value)
+                    left_str = self._to_converted_code(target_attr.value)
                     attr_name = target_attr.attr
 
                     # 检查 'b' (BUILD) 是否被禁用
@@ -535,7 +549,7 @@ class Visitor(ast.NodeVisitor):
                         assign_opcode = b'{left_opcode}(N}V{attr}\n{right_opcode}stb' \
                                         .replace(b'{left_opcode}', left_opcode) \
                                         .replace(b'{attr}', attr_name.encode())
-                        self.converted_code.append(f"{ast.unparse(target_attr)} = {{right_code}}")
+                        self.converted_code.append(f"{left_str}.{attr_name} = {{right_code}}")
                     else:
                         # 使用 setattr(obj, attr, val)
                         if "setattr" not in self.names:
@@ -544,14 +558,14 @@ class Visitor(ast.NodeVisitor):
                             self.converted_code.append("from builtins import setattr")
                             self.memo_id += 1
                         
+                        self.has_transformation = True
                         setattr_id = cast(str, self.names["setattr"][0])
                         assign_opcode = b'g{setattr_id}\n({left_opcode}V{attr}\n{right_opcode}tR' \
                                         .replace(b'{setattr_id}', setattr_id.encode()) \
                                         .replace(b'{left_opcode}', left_opcode) \
                                         .replace(b'{attr}', attr_name.encode())
                         
-                        obj_name = ast.unparse(target_attr.value)
-                        self.converted_code.append(f"setattr({obj_name}, \"{attr_name}\", {{right_code}})")
+                        self.converted_code.append(f"setattr({left_str}, \"{attr_name}\", {{right_code}})")
 
             elif isinstance(node.targets[0], ast.Subscript):
                 # eg: a["test"] = ...
@@ -561,6 +575,7 @@ class Visitor(ast.NodeVisitor):
                 assign_opcode = b'{outside_opcode}({inside_opcode}{right_opcode}u' \
                                 .replace(b'{outside_opcode}', outside_opcode) \
                                 .replace(b'{inside_opcode}', inside_opcode)
+                self.converted_code.append(f"{self._to_converted_code(node.targets[0])} = {{right_code}}")
 
             else:
                 raise RuntimeError(
@@ -575,7 +590,7 @@ class Visitor(ast.NodeVisitor):
             right_opcode = self._flat(node.value)
             
             # 更新 converted_code 中的右值占位符
-            right_code = ast.unparse(node.value)
+            right_code = self._to_converted_code(node.value)
             if self.converted_code and "{right_code}" in self.converted_code[-1]:
                 self.converted_code[-1] = self.converted_code[-1].format(right_code=right_code)
 
@@ -595,7 +610,7 @@ class Visitor(ast.NodeVisitor):
         # 函数调用
         def _generate_opcode():
             opcode = self._flat(node)
-            self.converted_code.append(ast.unparse(node))
+            self.converted_code.append(self._to_converted_code(node))
             self.final_opcode += opcode
 
         start = node.lineno - 1
@@ -763,7 +778,7 @@ def cli() -> None:
         if need_check:
             print(f'  [-] opcode test result: {put_color(visitor.check(), "white")}')
 
-        if visitor.converted_code:
+        if visitor.has_transformation and visitor.converted_code:
             print(f'  [-] converted code: ')
             for line in visitor.converted_code:
                 print(f'      {put_color(line, "gray")}')
