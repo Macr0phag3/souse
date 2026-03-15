@@ -133,8 +133,13 @@ class Visitor(ast.NodeVisitor):
             items = []
             for k, v in zip(node.keys, node.values):
                 if k is None: continue
-                items.append(f"{self._to_converted_code(k)}: {self._to_converted_code(v)}")
+                items.append(f"{self._to_converted_code(cast(ast.AST, k))}: {self._to_converted_code(v)}")
             return f"{{{', '.join(items)}}}"
+        elif isinstance(node, ast.Subscript):
+            slice_node = node.slice
+            if isinstance(slice_node, ast.Index):
+                slice_node = getattr(slice_node, 'value')
+            return f"getattr({self._to_converted_code(node.value)}, \"__getitem__\")({self._to_converted_code(slice_node)})"
         elif isinstance(node, ast.Call):
             args = ", ".join([self._to_converted_code(arg) for arg in node.args])
             return f"{self._to_converted_code(node.func)}({args})"
@@ -366,22 +371,31 @@ class Visitor(ast.NodeVisitor):
         return f'g{getattr_id}\n({obj_opcode.decode()}V{attr}\ntR'.encode('utf-8')
 
     def _parse_subscript(self, node: ast.Subscript) -> Any:
-        # 先分析 [] 里面
-        if isinstance(node.slice, ast.Index):
-            # 兼容 py < 3.9
-            node.slice = getattr(node.slice, 'value')
+        # 加载模式: obj[key] -> getattr(obj, "__getitem__")(key)
+        if "getattr" not in self.names:
+            self.names["getattr"] = [cast(Optional[str], str(self.memo_id)), "builtins"]
+            self.final_opcode += f'cbuiltins\ngetattr\np{self.memo_id}\n'.encode('utf-8')
+            self.converted_code.append("from builtins import getattr")
+            self.memo_id += 1
 
-        if isinstance(node.slice, ast.Subscript):
+        self.has_transformation = True
+        getattr_id = cast(str, self.names["getattr"][0])
+
+        slice_node = node.slice
+        if isinstance(slice_node, ast.Index):
+            # 兼容 py < 3.9
+            slice_node = getattr(slice_node, 'value')
+
+        if isinstance(slice_node, ast.Subscript):
             raise RuntimeError(
                 put_color("this nested index is not supported yet: ", "red") +
-                f'{put_color(node.slice.__class__, "cyan")} in {self.code}'
+                f'{put_color(slice_node.__class__, "cyan")} in {self.code}'
             )
 
-        inside_opcode = self._flat(node.slice)
+        obj_opcode = self._flat(node.value)
+        key_opcode = self._flat(slice_node)
 
-        # 再分析 [] 外面
-        outside_opcode = self._flat(node.value)
-        return outside_opcode, inside_opcode
+        return f'g{getattr_id}\n({obj_opcode.decode()}V__getitem__\ntR({key_opcode.decode()}tR'.encode('utf-8')
 
     def _parse_call(self, node: ast.Call) -> Any:
         def _normal_generate(node):
@@ -588,7 +602,14 @@ class Visitor(ast.NodeVisitor):
 
             elif isinstance(node.targets[0], ast.Subscript):
                 # eg: a["test"] = ...
-                outside_opcode, inside_opcode = self._flat(node.targets[0])
+                target_sub = cast(ast.Subscript, node.targets[0])
+                slice_node = target_sub.slice
+                if isinstance(slice_node, ast.Index):
+                    slice_node = getattr(slice_node, 'value')
+
+                inside_opcode = self._flat(slice_node)
+                outside_opcode = self._flat(target_sub.value)
+
                 assign_opcode = b'{outside_opcode}({inside_opcode}{right_opcode}u' \
                                 .replace(b'{outside_opcode}', outside_opcode) \
                                 .replace(b'{inside_opcode}', inside_opcode)
