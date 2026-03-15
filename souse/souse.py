@@ -62,6 +62,14 @@ class Visitor(ast.NodeVisitor):
     def souse(self) -> None:
         self.result = self.final_opcode+b'.'
 
+    def _ensure_builtins(self, name: str) -> str:
+        if name not in self.names:
+            self.names[name] = [cast(Optional[str], str(self.memo_id)), "builtins"]
+            self.final_opcode += f'cbuiltins\n{name}\np{self.memo_id}\n'.encode('utf-8')
+            self.converted_code.append(f"from builtins import {name}")
+            self.memo_id += 1
+        return cast(str, self.names[name][0])
+
     def check(self) -> str:
         with open('.souse-result.tmp', 'w') as fw:
             fw.write(
@@ -116,7 +124,7 @@ class Visitor(ast.NodeVisitor):
             f'{put_color(node.__class__, "cyan")} in {self.code}'
         )
 
-    def _to_converted_code(self, node: ast.AST) -> str:
+    def _to_converted_code(self, node: ast.AST, is_assignment: bool = False) -> str:
         if isinstance(node, ast.Attribute):
             if isinstance(node.value, ast.Name) and node.value.id in self.lazy_modules:
                 return node.attr
@@ -139,6 +147,9 @@ class Visitor(ast.NodeVisitor):
             slice_node = node.slice
             if isinstance(slice_node, ast.Index):
                 slice_node = getattr(slice_node, 'value')
+            
+            if is_assignment:
+                return f"{self._to_converted_code(node.value)}[{self._to_converted_code(slice_node)}]"
             return f"getattr({self._to_converted_code(node.value)}, \"__getitem__\")({self._to_converted_code(slice_node)})"
         elif isinstance(node, ast.Call):
             args = ", ".join([self._to_converted_code(arg) for arg in node.args])
@@ -359,27 +370,15 @@ class Visitor(ast.NodeVisitor):
                 return f'g{cast(str, self.names[full_name][0])}\n'.encode('utf-8')
 
         # 否则就用 getattr(obj, attr)
-        if "getattr" not in self.names:
-            self.names["getattr"] = [cast(Optional[str], str(self.memo_id)), "builtins"]
-            self.final_opcode += f'cbuiltins\ngetattr\np{self.memo_id}\n'.encode('utf-8')
-            self.converted_code.append("from builtins import getattr")
-            self.memo_id += 1
-        
+        getattr_id = self._ensure_builtins("getattr")
         self.has_transformation = True
-        getattr_id = cast(str, self.names["getattr"][0])
         obj_opcode = self._flat(targets)
         return f'g{getattr_id}\n({obj_opcode.decode()}V{attr}\ntR'.encode('utf-8')
 
     def _parse_subscript(self, node: ast.Subscript) -> Any:
         # 加载模式: obj[key] -> getattr(obj, "__getitem__")(key)
-        if "getattr" not in self.names:
-            self.names["getattr"] = [cast(Optional[str], str(self.memo_id)), "builtins"]
-            self.final_opcode += f'cbuiltins\ngetattr\np{self.memo_id}\n'.encode('utf-8')
-            self.converted_code.append("from builtins import getattr")
-            self.memo_id += 1
-
+        getattr_id = self._ensure_builtins("getattr")
         self.has_transformation = True
-        getattr_id = cast(str, self.names["getattr"][0])
 
         slice_node = node.slice
         if isinstance(slice_node, ast.Index):
@@ -585,14 +584,8 @@ class Visitor(ast.NodeVisitor):
                         self.converted_code.append(f"{left_str}.{attr_name} = {right_str}")
                     else:
                         # 使用 setattr(obj, attr, val)
-                        if "setattr" not in self.names:
-                            self.names["setattr"] = [cast(Optional[str], str(self.memo_id)), "builtins"]
-                            self.final_opcode += f'cbuiltins\nsetattr\np{self.memo_id}\n'.encode('utf-8')
-                            self.converted_code.append("from builtins import setattr")
-                            self.memo_id += 1
-                        
+                        setattr_id = self._ensure_builtins("setattr")
                         self.has_transformation = True
-                        setattr_id = cast(str, self.names["setattr"][0])
                         assign_opcode = b'g{setattr_id}\n({left_opcode}V{attr}\n{right_opcode}tR' \
                                         .replace(b'{setattr_id}', setattr_id.encode()) \
                                         .replace(b'{left_opcode}', left_opcode) \
@@ -607,13 +600,33 @@ class Visitor(ast.NodeVisitor):
                 if isinstance(slice_node, ast.Index):
                     slice_node = getattr(slice_node, 'value')
 
+                # 检查 'u' (SETITEMS) 是否被禁用
+                code = ['u']
+                related_rules = {
+                    k: v for k, v in self.firewall_rules.items()
+                    if k in code and v in ["*"]
+                }
+
                 inside_opcode = self._flat(slice_node)
                 outside_opcode = self._flat(target_sub.value)
+                inside_str = self._to_converted_code(slice_node)
+                outside_str = self._to_converted_code(target_sub.value)
 
-                assign_opcode = b'{outside_opcode}({inside_opcode}{right_opcode}u' \
-                                .replace(b'{outside_opcode}', outside_opcode) \
-                                .replace(b'{inside_opcode}', inside_opcode)
-                self.converted_code.append(f"{self._to_converted_code(node.targets[0])} = {right_str}")
+                if not related_rules:
+                    assign_opcode = b'{outside_opcode}({inside_opcode}{right_opcode}u' \
+                                    .replace(b'{outside_opcode}', outside_opcode) \
+                                    .replace(b'{inside_opcode}', inside_opcode)
+                    self.converted_code.append(f"{outside_str}[{inside_str}] = {right_str}")
+                else:
+                    # 使用 getattr(obj, "__setitem__")(key, val)
+                    getattr_id = self._ensure_builtins("getattr")
+                    self.has_transformation = True
+                    assign_opcode = b'g{getattr_id}\n({outside_opcode}V__setitem__\ntR({inside_opcode}{right_opcode}tR' \
+                                    .replace(b'{getattr_id}', getattr_id.encode()) \
+                                    .replace(b'{outside_opcode}', outside_opcode) \
+                                    .replace(b'{inside_opcode}', inside_opcode)
+                    
+                    self.converted_code.append(f"getattr({outside_str}, \"__setitem__\")({inside_str}, {right_str})")
 
             else:
                 raise RuntimeError(
