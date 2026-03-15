@@ -108,6 +108,25 @@ class Visitor(ast.NodeVisitor):
             self.memo_id += 1
         return cast(str, self.names[name][0])
 
+    def _ensure_module(self, alias: str) -> str:
+        # 使用 __import__(name)
+        if alias not in self.names:
+            module_name = self.lazy_modules[alias]
+            import_id = self._ensure_builtins("__import__")
+            self.names[alias] = [cast(Optional[str], str(self.memo_id)), None]
+
+            self.final_opcode += Opcodes.GET + f'{import_id}\n'.encode() + \
+                                 Opcodes.MARK + Opcodes.STRING + f'{module_name}\n'.encode() + \
+                                 Opcodes.TUPLE + Opcodes.REDUCE + \
+                                 Opcodes.PUT + f'{self.memo_id}\n'.encode()
+            
+            # 记录转换后的代码
+            log = f"import {module_name}" + (f" as {alias}" if alias != module_name else "")
+            self.converted_code.append(log)
+
+            self.memo_id += 1
+        return cast(str, self.names[alias][0])
+
     def _get_rule_key(self, op: bytes) -> str:
         mapping = {
             Opcodes.BINTRUE: "\\x88",
@@ -336,6 +355,9 @@ class Visitor(ast.NodeVisitor):
             # 自动处理内置函数
             if hasattr(builtins, node.id):
                 memo_name = self._ensure_builtins(node.id)
+            elif node.id in self.lazy_modules:
+                # 自动处理已导入的模块
+                memo_name = self._ensure_module(node.id)
             else:
                 # 说明之前没有定义这个变量
                 self._error(node, f"this var is not defined: {node.id}")
@@ -376,9 +398,6 @@ class Visitor(ast.NodeVisitor):
         if isinstance(slice_node, ast.Index):
             # 兼容 py < 3.9
             slice_node = getattr(slice_node, 'value')
-
-        if isinstance(slice_node, ast.Subscript):
-            self._error(slice_node, f"this nested index is not supported yet: {slice_node.__class__}")
 
         obj_opcode = self._flat(node.value)
         key_opcode = self._flat(slice_node)
@@ -769,7 +788,7 @@ def cli() -> None:
     print("\n[*] done")
 
 
-VERSION = '3.2'
+VERSION = '4.0'
 LOGO = (
     f'''
   ██████  ▒█████   █    ██   ██████ ▓█████ 
