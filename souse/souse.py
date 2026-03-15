@@ -13,16 +13,13 @@ from colorama import Fore, Style, init as Init
 
 
 def put_color(string: Any, color: str, bold: bool = True) -> str:
-    '''
-    give me some color to see :P
-    '''
-
     if color == 'gray':
-        COLOR = Style.DIM+Fore.WHITE
+        COLOR = Fore.LIGHTBLACK_EX
     else:
         COLOR = getattr(Fore, color.upper(), "WHITE")
 
-    return f'{Style.BRIGHT if bold else ""}{COLOR}{str(string)}{Style.RESET_ALL}'
+    style = Style.BRIGHT if bold and color != 'gray' else ""
+    return f'{style}{COLOR}{str(string)}{Style.RESET_ALL}'
 
 
 def transfer_funcs(func_name: Optional[str]) -> Callable:
@@ -54,10 +51,12 @@ class Visitor(ast.NodeVisitor):
         self.memo_id: int = 0  # memo 的顶层 id
         self.firewall_rules: Dict[str, str] = firewall_rules
         self.source_code: str = source_code
+        self.lazy_modules: Dict[str, str] = {}  # import requests -> {'requests': 'requests'}
 
         self.final_opcode: bytes = b''
         self.code: str = ""
         self.result: bytes = b""
+        self.converted_code: List[str] = []
 
     def souse(self) -> None:
         self.result = self.final_opcode+b'.'
@@ -310,23 +309,32 @@ class Visitor(ast.NodeVisitor):
 
         return f'g{memo_name}\n'.encode('utf-8')
 
-    def _parse_attribute(self, node: ast.Attribute) -> Any:
+    def _parse_attribute(self, node: ast.Attribute) -> bytes:
         targets = node.value
         attr = node.attr
 
         if isinstance(targets, ast.Name):
-            # eg: from requests import get
-            #     get.a = 1
-            # eg: from fake_module import A
-            #     A.a = 1  # A is 'mappingproxy' object
+            if targets.id in self.lazy_modules:
+                # 如果已经 import 了，直接获取
+                module_name = self.lazy_modules[targets.id]
+                full_name = f"{module_name}.{attr}"
+                if full_name not in self.names:
+                    self.names[full_name] = [cast(Optional[str], str(self.memo_id)), module_name]
+                    self.final_opcode += f'c{module_name}\n{attr}\np{self.memo_id}\n'.encode('utf-8')
+                    self.converted_code.append(f"from {module_name} import {attr}")
+                    self.memo_id += 1
+                return f'g{cast(str, self.names[full_name][0])}\n'.encode('utf-8')
 
-            opcode = self._flat(targets)
-            return opcode, attr.encode("utf-8")
-        else:
-            raise RuntimeError(
-                put_color("this complex dot operators(.) is not supported yet: ", "red") +
-                f'{put_color(targets.__class__, "cyan")} in {self.code}'
-            )
+        # 否则就用 getattr(obj, attr)
+        if "getattr" not in self.names:
+            self.names["getattr"] = [cast(Optional[str], str(self.memo_id)), "builtins"]
+            self.final_opcode += f'cbuiltins\ngetattr\np{self.memo_id}\n'.encode('utf-8')
+            self.converted_code.append("from builtins import getattr")
+            self.memo_id += 1
+        
+        getattr_id = cast(str, self.names["getattr"][0])
+        obj_opcode = self._flat(targets)
+        return f'g{getattr_id}\n({obj_opcode.decode()}V{attr}\ntR'.encode('utf-8')
 
     def _parse_subscript(self, node: ast.Subscript) -> Any:
         # 先分析 [] 里面
@@ -348,7 +356,7 @@ class Visitor(ast.NodeVisitor):
 
     def _parse_call(self, node: ast.Call) -> Any:
         def _normal_generate(node):
-            if isinstance(node.func, ast.Name) or isinstance(node.func, ast.Call):
+            if isinstance(node.func, (ast.Name, ast.Call, ast.Attribute)):
                 opcode = (
                     b"(" + b"".join(
                         [self._flat(arg) for arg in node.args]
@@ -445,29 +453,12 @@ class Visitor(ast.NodeVisitor):
             )
 
     def visit_Import(self, node: ast.Import) -> None:
-        # MUST raise an Error
         # eg: import os
-        start = node.lineno - 1
-        end = getattr(node, 'end_lineno', None)
-        end = end if end is not None else node.lineno
-        all_lines = self.source_code.split('\n')
-        selected: List[str] = []
-        for i in range(start, end):
-            if i < len(all_lines):
-                selected.append(all_lines[i])
-        self.code = put_color("\n".join(selected), "white")
-
+        # eg: import os as o
         for _name in node.names:
             name = _name.name
-            asname = f' as {_name.asname}' if _name.asname else ''
-
-            raise RuntimeError(
-                put_color("direct import is not supported yet: ", "red") +
-                f"{self.code}, "
-                "use " +
-                put_color(f"from {name} import xxx{asname}", "cyan") +
-                " instead!"
-            )
+            asname = _name.asname or name
+            self.lazy_modules[asname] = name
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         # eg: from os import system
@@ -476,8 +467,10 @@ class Visitor(ast.NodeVisitor):
         def _generate_opcode():
             for _name in node.names:
                 name = _name.asname or _name.name
-                self.names[name] = [str(self.memo_id), node.module]
+                self.names[name] = [cast(Optional[str], str(self.memo_id)), node.module]
                 self.final_opcode += f'c{node.module}\n{name}\np{self.memo_id}\n'.encode('utf-8')
+                as_suffix = f" as {_name.asname}" if _name.asname else ""
+                self.converted_code.append(f"from {node.module} import {_name.name}{as_suffix}")
                 self.memo_id += 1
 
         _generate_opcode()
@@ -495,21 +488,70 @@ class Visitor(ast.NodeVisitor):
             # 先分析等号左边
             if isinstance(node.targets[0], ast.Name):
                 # eg: a = ...
-                target = cast(ast.Name, node.targets[0])
-                name = target.id
+                target_name = cast(ast.Name, node.targets[0])
+                name = target_name.id
                 assign_opcode = b'{right_opcode}p{self.memo_id}\n' \
                                 .replace(b'{self.memo_id}', str(self.memo_id).encode("utf-8"))
 
-                self.names[name] = [str(self.memo_id), None]
+                self.names[name] = [cast(Optional[str], str(self.memo_id)), None]
+                self.converted_code.append(f"{name} = {{right_code}}")
                 self.memo_id += 1
 
             elif isinstance(node.targets[0], ast.Attribute):
                 # 等号左边有 . 出现
+                # eg: os.system = "whoami"
                 target_attr = cast(ast.Attribute, node.targets[0])
-                left_opcode, attr = self._parse_attribute(target_attr)
-                assign_opcode = b'{left_opcode}(N}V{attr}\n{right_opcode}stb' \
-                                .replace(b'{left_opcode}', left_opcode) \
-                                .replace(b'{attr}', attr)
+                if isinstance(target_attr.value, ast.Name) and target_attr.value.id in self.lazy_modules:
+                    # 1. 如果已经 import 了，直接通过 import 获取
+                    module_name = self.lazy_modules[target_attr.value.id]
+                    attr_name = target_attr.attr
+                    full_name = f"{module_name}.{attr_name}"
+
+                    if full_name not in self.names:
+                        self.names[full_name] = [cast(Optional[str], str(self.memo_id)), module_name]
+                        self.final_opcode += f'c{module_name}\n{attr_name}\np{self.memo_id}\n'.encode('utf-8')
+                        self.converted_code.append(f"from {module_name} import {attr_name}")
+                        self.memo_id += 1
+
+                    assign_opcode = b'{right_opcode}p{self.memo_id}\n' \
+                                    .replace(b'{self.memo_id}', str(self.memo_id).encode("utf-8"))
+
+                    self.names[full_name] = [cast(Optional[str], str(self.memo_id)), None]
+                    self.converted_code.append(f"{attr_name} = {{right_code}}")
+                    self.memo_id += 1
+                else:
+                    # 2. 否则就用 getattr(obj, attr)
+                    left_opcode = self._flat(target_attr.value)
+                    attr_name = target_attr.attr
+
+                    # 检查 'b' (BUILD) 是否被禁用
+                    code = ['b']
+                    related_rules = {
+                        k: v for k, v in self.firewall_rules.items()
+                        if k in code and v in ["*"]
+                    }
+
+                    if not related_rules:
+                        assign_opcode = b'{left_opcode}(N}V{attr}\n{right_opcode}stb' \
+                                        .replace(b'{left_opcode}', left_opcode) \
+                                        .replace(b'{attr}', attr_name.encode())
+                        self.converted_code.append(f"{ast.unparse(target_attr)} = {{right_code}}")
+                    else:
+                        # 使用 setattr(obj, attr, val)
+                        if "setattr" not in self.names:
+                            self.names["setattr"] = [cast(Optional[str], str(self.memo_id)), "builtins"]
+                            self.final_opcode += f'cbuiltins\nsetattr\np{self.memo_id}\n'.encode('utf-8')
+                            self.converted_code.append("from builtins import setattr")
+                            self.memo_id += 1
+                        
+                        setattr_id = cast(str, self.names["setattr"][0])
+                        assign_opcode = b'g{setattr_id}\n({left_opcode}V{attr}\n{right_opcode}tR' \
+                                        .replace(b'{setattr_id}', setattr_id.encode()) \
+                                        .replace(b'{left_opcode}', left_opcode) \
+                                        .replace(b'{attr}', attr_name.encode())
+                        
+                        obj_name = ast.unparse(target_attr.value)
+                        self.converted_code.append(f"setattr({obj_name}, \"{attr_name}\", {{right_code}})")
 
             elif isinstance(node.targets[0], ast.Subscript):
                 # eg: a["test"] = ...
@@ -531,6 +573,12 @@ class Visitor(ast.NodeVisitor):
             # eg: ... = 1 -> isinstance(node.value, ast.Constant)
             # eg: a = builtins.globals() -> isinstance(node.value, ast.Call)
             right_opcode = self._flat(node.value)
+            
+            # 更新 converted_code 中的右值占位符
+            right_code = ast.unparse(node.value)
+            if self.converted_code and "{right_code}" in self.converted_code[-1]:
+                self.converted_code[-1] = self.converted_code[-1].format(right_code=right_code)
+
             self.final_opcode += assign_opcode.replace(
                 b"{right_opcode}", right_opcode
             )
@@ -546,7 +594,9 @@ class Visitor(ast.NodeVisitor):
     def visit_Call(self, node: ast.Call) -> None:
         # 函数调用
         def _generate_opcode():
-            self.final_opcode += self._flat(node)
+            opcode = self._flat(node)
+            self.converted_code.append(ast.unparse(node))
+            self.final_opcode += opcode
 
         start = node.lineno - 1
         end = getattr(node, 'end_lineno', None)
@@ -712,6 +762,11 @@ def cli() -> None:
 
         if need_check:
             print(f'  [-] opcode test result: {put_color(visitor.check(), "white")}')
+
+        if visitor.converted_code:
+            print(f'  [-] converted code: ')
+            for line in visitor.converted_code:
+                print(f'      {put_color(line, "gray")}')
 
         if run_test:
             loc = [
