@@ -84,6 +84,10 @@ Out[9]: 0
 - [x] opcode bypass supported
 	- [x] auto bypass basic limitation（`V`、`S`、`I`、...）
 	- [x] auto bypass complex limitation（`R`、`o`、`i`）
+	- [x] auto bypass `stb` limitation (via `setattr`)
+- [x] Intelligent Import Transformation (Lazy Import)
+- [x] Intelligent Attribute Assignment Transformation (By `getattr`/`setattr`)
+- [x] Converted code output support
 - [x] value bypass supported
 	- [x] number
 - [x] API
