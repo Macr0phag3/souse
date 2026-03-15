@@ -1,5 +1,5 @@
 # souse
-A tool for converting Python source code to opcode(pickle)
+A tool for converting Python source code to opcode(pickle), source code is payload :)
 
 [中文版](./README_CN.md)
 

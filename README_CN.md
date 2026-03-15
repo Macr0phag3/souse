@@ -1,5 +1,5 @@
 # souse
-一个将 Python 源码全自动化转换为 Opcode (pickle) 的工具。
+一个将 Python 源码全自动化转换为 Opcode (pickle) 的工具，源码即 Payload :)
 
 [English Version](./README.md)
 
