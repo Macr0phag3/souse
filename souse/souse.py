@@ -65,8 +65,8 @@ class Opcodes:
     LIST = b'l'
     TUPLE = b't'
     DICT = b'd'
-    SET = b'\x8f'
-    EMPTY_SET = b'\x90'
+    EMPTY_SET = b'\x8f'
+    ADDITEMS = b'\x90'
 
     # Operations
     REDUCE = b'R'
@@ -405,9 +405,9 @@ class Visitor(ast.NodeVisitor):
     def _parse_set(self, node: ast.Set) -> Any:
         # PVM Protocol 4
         return (
-            b'\x8f(' +
+            Opcodes.EMPTY_SET +
             b"".join([self._flat(elt) for elt in node.elts]) +
-            b'\x90'
+            Opcodes.ADDITEMS
         )
 
     def _parse_list(self, node: ast.List) -> bytes:
