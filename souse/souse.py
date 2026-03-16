@@ -8,6 +8,7 @@ import builtins
 import argparse
 import functools
 import pickletools
+from collections import Counter
 from typing import Any, Dict, List, Optional, Union, Callable, Tuple, cast
 
 from colorama import Fore, Style, init as Init # type: ignore
@@ -184,6 +185,12 @@ class Visitor(ast.NodeVisitor):
         return choice
 
     def generic_visit(self, node: ast.AST) -> None:
+        # 只允许“容器/上下文”节点走默认遍历：
+        # - Module/Expr：纯容器，不产生语义
+        # - Load/Store/Del：仅上下文标记
+        # 其它节点必须有显式 visit_XXX 实现，否则直接报错。
+        # 注意：即便 visit_Assign 已实现，这里也不会处理 Assign，
+        # 因为 NodeVisitor 会优先调用 visit_Assign，不走 generic_visit。
         if isinstance(node, (ast.Module, ast.Expr, ast.Load, ast.Store, ast.Del)):
             super().generic_visit(node)
         else:
@@ -201,23 +208,57 @@ class Visitor(ast.NodeVisitor):
         ).read()
 
     def optimize(self) -> bytes:
-        optimized: List[bytes] = []
-        result = pickletools.optimize(self.result).split(b'\n')
-        memo_g_ids = [i for i in result if i.startswith(b"g")]
-        while result:
-            optimized.append(result.pop(0))
+        def _normalize_memo_id(arg: Any) -> Any:
+            try:
+                return int(arg)
+            except Exception:
+                return arg
 
+        put_ops = {"PUT", "BINPUT", "LONG_BINPUT"}
+        get_ops = {"GET", "BINGET", "LONG_BINGET"}
+
+        # 先做一次标准优化，统一字节流
+        data = pickletools.optimize(self.result)
+        # 按 opcode 级别解析，避免按换行切分破坏二进制数据
+        ops: List[Tuple[pickletools.OpcodeInfo, Any, int]] = list(pickletools.genops(data))
+        if not ops:
+            return data
+
+        # 用 genops 提供的位置计算每条 opcode 在字节流中的区间
+        positions = [pos for _, _, pos in ops]
+        ends = positions[1:] + [len(data)]
+
+        # 统计每个 memo id 的 GET 使用次数
+        get_counts = Counter(
+            _normalize_memo_id(arg)
+            for op, arg, _ in ops
+            if op.name in get_ops
+        )
+
+        # 删除紧跟在 PUT 之后、且仅使用一次的 GET
+        drop_indices: set[int] = set()
+        for i in range(len(ops) - 1):
+            op, arg, _ = ops[i]
+            next_op, next_arg, _ = ops[i + 1]
+
+            if op.name not in put_ops or next_op.name not in get_ops:
+                continue
+
+            put_id = _normalize_memo_id(arg)
+            get_id = _normalize_memo_id(next_arg)
             if (
-                len(optimized) > 2 and
-                optimized[-2].startswith(b"p") and
-                optimized[-1].startswith(b"g") and
-                optimized[-1].replace(b"g", b"p", 1) == optimized[-2] and
-                memo_g_ids.count(optimized[-1]) == 1
+                put_id == get_id and
+                get_counts.get(get_id, 0) == 1
             ):
-                # 优化掉
-                optimized.pop()
+                drop_indices.add(i + 1)
 
-        return pickletools.optimize(b'\n'.join(optimized))
+        # 按区间重建字节流，再做一次标准优化
+        rebuilt = b"".join(
+            data[positions[i]:ends[i]]
+            for i in range(len(ops))
+            if i not in drop_indices
+        )
+        return pickletools.optimize(rebuilt)
 
     def _flat(self, node: ast.AST) -> Any:
         '''递归处理基础的语句
@@ -636,8 +677,8 @@ class Visitor(ast.NodeVisitor):
         ), "white")
         _generate_opcode()
 
-    def visit_Call(self, node: ast.Call) -> None:
-        # 函数调用
+    def _visit_expr_stmt(self, node: ast.AST) -> None:
+        # 统一处理“表达式语句”
         def _generate_opcode():
             opcode = self._flat(node)
             self.converted_code.append(self._to_converted_code(node))
@@ -650,6 +691,14 @@ class Visitor(ast.NodeVisitor):
             self.source_code.split('\n')[start:end]  # type: ignore
         ), "white")
         _generate_opcode()
+
+    def visit_Call(self, node: ast.Call) -> None:
+        # 函数调用（表达式语句）
+        self._visit_expr_stmt(node)
+
+    def visit_Name(self, node: ast.Name) -> None:
+        # 单独使用变量名（表达式语句）
+        self._visit_expr_stmt(node)
 
 
 class API:
@@ -827,7 +876,7 @@ def cli() -> None:
     print("\n[*] done")
 
 
-VERSION = '4.0'
+VERSION = '4.1'
 LOGO = (
     f'''
   ██████  ▒█████   █    ██   ██████ ▓█████ 

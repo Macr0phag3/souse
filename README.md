@@ -41,7 +41,18 @@ opcode:
 
 <img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/eg-2-s.png" width="600">
 
-#### 2.1.3 case 3
+#### 2.1.2 case 3
+
+You can control the final deserialization result by writing a variable name as the last line of the source code:
+
+```py
+c=10
+a = {}
+a["empty"] = ""
+c
+```
+
+#### 2.1.3 case 4
 
 transfer opcode:
 
