@@ -346,12 +346,26 @@ class Visitor(ast.NodeVisitor):
             return Opcodes.FLOAT + f'{node.value}\n'.encode()
 
         def __generate_str():
-            opcodes = [Opcodes.STRING, Opcodes.BINSTRING]
+            # 仅当内容是 ASCII 时，BINSTRING 才能安全表示。
+            literal_bytes = None
+            if all(ord(ch) < 128 for ch in node.value):
+                # STRING 指令要求 ASCII 的 Python 字面量；repr() 会做正确转义。
+                literal_bytes = repr(node.value).encode("ascii")
+
+            opcodes = [Opcodes.STRING, Opcodes.BINSTRING] if literal_bytes is not None else [Opcodes.STRING]
             choice = self._check_firewall(opcodes, value=str(node.value), node=node)
             
             if choice == Opcodes.BINSTRING:
-                return Opcodes.BINSTRING + f"'{node.value}'\n".encode()
-            return Opcodes.STRING + f'{node.value}\n'.encode()
+                return Opcodes.BINSTRING + literal_bytes + b"\n"
+
+            # UNICODE (V) 需要 protocol 0 的转义格式；交给 pickle 生成最规范的 payload。
+            payload = pickle.dumps(node.value, protocol=0)
+            if not payload.startswith(Opcodes.STRING):
+                # 理论上不会触发
+                self._error(node, "unexpected pickle encoding for unicode string")
+
+            end = payload.index(b"\n", 1)
+            return Opcodes.STRING + payload[1:end] + b"\n"
 
         def __generate_none():
             return Opcodes.NONE
