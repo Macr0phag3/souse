@@ -406,7 +406,7 @@ class Visitor(ast.NodeVisitor):
     def _parse_set(self, node: ast.Set) -> Any:
         # PVM Protocol 4
         return (
-            Opcodes.EMPTY_SET +
+            Opcodes.EMPTY_SET + b"(" +
             b"".join([self._flat(elt) for elt in node.elts]) +
             Opcodes.ADDITEMS
         )
@@ -572,10 +572,7 @@ class Visitor(ast.NodeVisitor):
             args_opcode = Opcodes.MARK + b"".join([self._flat(arg) for arg in node.args]) + Opcodes.TUPLE
             return func_opcode + args_opcode + Opcodes.NEWOBJ
 
-        opcodes = [Opcodes.REDUCE, Opcodes.OBJ, Opcodes.INST]
-        if _can_newobj(node):
-            opcodes.append(Opcodes.NEWOBJ)
-
+        opcodes = [Opcodes.REDUCE, Opcodes.OBJ, Opcodes.INST, Opcodes.NEWOBJ]
         choice = self._check_firewall(opcodes, node=node)
 
         if choice == Opcodes.REDUCE:
@@ -584,9 +581,9 @@ class Visitor(ast.NodeVisitor):
             return _obj_generate(node)
         elif choice == Opcodes.INST:
             return _instance_generate(node)
-        elif choice == Opcodes.NEWOBJ:
+        elif choice == Opcodes.NEWOBJ and _can_newobj(node):
             return _newobj_generate(node)
-        
+
         self._error(node, "unsupported call bypass choice")
         return b""
 
