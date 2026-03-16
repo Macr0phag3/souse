@@ -545,52 +545,37 @@ class Visitor(ast.NodeVisitor):
             self._error(node.func, f"this instance call is not supported yet: {node.func.__class__.__name__}")
             return b""
 
-        def _can_newobj(node: ast.Call) -> bool:
-            if node.keywords:
-                # NEWOBJ does not support keyword args
-                return False
+        def _is_builtin_type(name: str, opcode_label: str) -> bool:
+            obj = getattr(builtins, name, None)
+            if not isinstance(obj, type):
+                print(put_color(f"[!] {opcode_label} requires a type (class); this bypass may fail at runtime.\n", "yellow"))
+            return True
+
+        def _can_newobj_like(node: ast.Call, opcode_label: str, require_keywords: bool) -> bool:
+            if require_keywords:
+                if not node.keywords:
+                    # NEWOBJ_EX requires keyword args
+                    return False
+            else:
+                if node.keywords:
+                    # NEWOBJ does not support keyword args
+                    return False
 
             func = node.func
-
-            def _is_builtin_type(name: str) -> bool:
-                obj = getattr(builtins, name, None)
-                if not isinstance(obj, type):
-                    print(put_color("[!] NEWOBJ (\\x81) requires a type (class); this bypass may fail at runtime.\n", "yellow"))
-                return True
-
             if isinstance(func, ast.Name):
-                return _is_builtin_type(func.id)
+                return _is_builtin_type(func.id, opcode_label)
 
             if isinstance(func, ast.Attribute):
                 if isinstance(func.value, ast.Name) and func.value.id == "builtins":
-                    return _is_builtin_type(func.attr)
+                    return _is_builtin_type(func.attr, opcode_label)
 
             return False
+
+        def _can_newobj(node: ast.Call) -> bool:
+            return _can_newobj_like(node, "NEWOBJ (\\x81)", require_keywords=False)
 
         def _can_newobj_ex(node: ast.Call) -> bool:
-            if not node.keywords:
-                # NEWOBJ_EX requires keyword args
-                return False
-            if any(kw.arg is None for kw in node.keywords):
-                # NEWOBJ_EX does not support **kwargs in this implementation
-                return False
-
-            func = node.func
-
-            def _is_builtin_type(name: str) -> bool:
-                obj = getattr(builtins, name, None)
-                if not isinstance(obj, type):
-                    print(put_color("[!] NEWOBJ_EX (\\x92) requires a type (class); this bypass may fail at runtime.\n", "yellow"))
-                return True
-
-            if isinstance(func, ast.Name):
-                return _is_builtin_type(func.id)
-
-            if isinstance(func, ast.Attribute):
-                if isinstance(func.value, ast.Name) and func.value.id == "builtins":
-                    return _is_builtin_type(func.attr)
-
-            return False
+            return _can_newobj_like(node, "NEWOBJ_EX (\\x92)", require_keywords=True)
 
         def _newobj_generate(node) -> bytes:
             # NEWOBJ: cls args_tuple \x81
