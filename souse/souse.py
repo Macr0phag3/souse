@@ -339,7 +339,7 @@ class Visitor(ast.NodeVisitor):
             choice = self._check_firewall(opcodes, value=str(node.value), node=node)
             
             if choice == Opcodes.BININT:
-                return Opcodes.BININT + struct.pack('i0i', node.value)
+                return Opcodes.BININT + struct.pack('<i', node.value)
             return Opcodes.INT + f'{node.value}\n'.encode()
 
         def __generate_float():
