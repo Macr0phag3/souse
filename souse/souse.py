@@ -83,6 +83,7 @@ class Opcodes:
     BUILD = b'b'
     EMPTY_DICT = b'}'
     NEWOBJ = b'\x81'
+    NEWOBJ_EX = b'\x92'
 
 
 class Visitor(ast.NodeVisitor):
@@ -554,7 +555,32 @@ class Visitor(ast.NodeVisitor):
             def _is_builtin_type(name: str) -> bool:
                 obj = getattr(builtins, name, None)
                 if not isinstance(obj, type):
-                    print(put_color("[!] NEWOBJ (\\x81) only supports type (class), so bypass may be failed\n", "yellow"))
+                    print(put_color("[!] NEWOBJ (\\x81) requires a type (class); this bypass may fail at runtime.\n", "yellow"))
+                return True
+
+            if isinstance(func, ast.Name):
+                return _is_builtin_type(func.id)
+
+            if isinstance(func, ast.Attribute):
+                if isinstance(func.value, ast.Name) and func.value.id == "builtins":
+                    return _is_builtin_type(func.attr)
+
+            return False
+
+        def _can_newobj_ex(node: ast.Call) -> bool:
+            if not node.keywords:
+                # NEWOBJ_EX requires keyword args
+                return False
+            if any(kw.arg is None for kw in node.keywords):
+                # NEWOBJ_EX does not support **kwargs in this implementation
+                return False
+
+            func = node.func
+
+            def _is_builtin_type(name: str) -> bool:
+                obj = getattr(builtins, name, None)
+                if not isinstance(obj, type):
+                    print(put_color("[!] NEWOBJ_EX (\\x92) requires a type (class); this bypass may fail at runtime.\n", "yellow"))
                 return True
 
             if isinstance(func, ast.Name):
@@ -572,7 +598,23 @@ class Visitor(ast.NodeVisitor):
             args_opcode = Opcodes.MARK + b"".join([self._flat(arg) for arg in node.args]) + Opcodes.TUPLE
             return func_opcode + args_opcode + Opcodes.NEWOBJ
 
+        def _newobj_ex_generate(node) -> bytes:
+            # NEWOBJ_EX: cls args_tuple kwargs_dict \x92
+            func_opcode = self._flat(node.func)
+            args_opcode = Opcodes.MARK + b"".join([self._flat(arg) for arg in node.args]) + Opcodes.TUPLE
+
+            kv_opcodes = []
+            for kw in node.keywords:
+                key_node = ast.Constant(value=kw.arg)
+                kv_opcodes.append(self._parse_constant(key_node))
+                kv_opcodes.append(self._flat(kw.value))
+
+            kwargs_opcode = Opcodes.MARK + b"".join(kv_opcodes) + Opcodes.DICT
+            return func_opcode + args_opcode + kwargs_opcode + Opcodes.NEWOBJ_EX
+
         opcodes = [Opcodes.REDUCE, Opcodes.OBJ, Opcodes.INST, Opcodes.NEWOBJ]
+        if _can_newobj_ex(node):
+            opcodes.append(Opcodes.NEWOBJ_EX)
         choice = self._check_firewall(opcodes, node=node)
 
         if choice == Opcodes.REDUCE:
@@ -583,6 +625,8 @@ class Visitor(ast.NodeVisitor):
             return _instance_generate(node)
         elif choice == Opcodes.NEWOBJ and _can_newobj(node):
             return _newobj_generate(node)
+        elif choice == Opcodes.NEWOBJ_EX and _can_newobj_ex(node):
+            return _newobj_ex_generate(node)
 
         self._error(node, "unsupported call bypass choice")
         return b""
