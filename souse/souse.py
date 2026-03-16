@@ -9,7 +9,7 @@ import argparse
 import functools
 import pickletools
 from collections import Counter
-from typing import Any, Dict, List, Optional, Union, Callable, Tuple, cast
+from typing import Any, Dict, List, Optional, Union, Callable, Tuple
 
 from colorama import Fore, Style, init as Init # type: ignore
 
@@ -44,7 +44,7 @@ def transfer_funcs(func_name: Optional[str]) -> Callable:
             "yellow"
         ))
 
-    return cast(Callable, func)
+    return func
 
 
 class Opcodes:
@@ -87,35 +87,35 @@ class Opcodes:
 
 class Visitor(ast.NodeVisitor):
     def __init__(self, source_code: str, firewall_rules: Dict[str, str]) -> None:
-        self.names: Dict[str, List[Optional[str]]] = {}  # 变量记录
-        self.memo_id: int = 0  # memo 的顶层 id
-        self.firewall_rules: Dict[str, str] = firewall_rules
-        self.source_code: str = source_code
-        self.lazy_modules: Dict[str, str] = {}  # import requests -> {'requests': 'requests'}
+        self.names = {}  # 变量记录
+        self.memo_id = 0  # memo 的顶层 id
+        self.firewall_rules = firewall_rules
+        self.source_code = source_code
+        self.lazy_modules = {}  # import requests -> {'requests': 'requests'}
 
-        self.final_opcode: bytes = b''
-        self.code: str = ""
-        self.result: bytes = b""
-        self.converted_code: List[str] = []
-        self.has_transformation: bool = False
+        self.final_opcode = b''
+        self.code = ""
+        self.result = b""
+        self.converted_code = []
+        self.has_transformation = False
 
     def souse(self) -> None:
         self.result = self.final_opcode + Opcodes.STOP
 
     def _ensure_builtins(self, name: str) -> str:
         if name not in self.names:
-            self.names[name] = [cast(Optional[str], str(self.memo_id)), "builtins"]
+            self.names[name] = [str(self.memo_id), "builtins"]
             self.final_opcode += Opcodes.GLOBAL + f'builtins\n{name}\n'.encode('utf-8') + Opcodes.PUT + f'{self.memo_id}\n'.encode('utf-8')
             self.converted_code.append(f"from builtins import {name}")
             self.memo_id += 1
-        return cast(str, self.names[name][0])
+        return self.names[name][0]
 
     def _ensure_module(self, alias: str) -> str:
         # 使用 __import__(name)
         if alias not in self.names:
             module_name = self.lazy_modules[alias]
             import_id = self._ensure_builtins("__import__")
-            self.names[alias] = [cast(Optional[str], str(self.memo_id)), None]
+            self.names[alias] = [str(self.memo_id), None]
 
             self.final_opcode += Opcodes.GET + f'{import_id}\n'.encode() + \
                                  Opcodes.MARK + Opcodes.STRING + f'{module_name}\n'.encode() + \
@@ -127,12 +127,12 @@ class Visitor(ast.NodeVisitor):
             self.converted_code.append(log)
 
             self.memo_id += 1
-        return cast(str, self.names[alias][0])
+        return self.names[alias][0]
 
     def _parse_unary_op(self, node: ast.UnaryOp) -> bytes:
         if isinstance(node.op, ast.USub) and isinstance(node.operand, ast.Constant) and isinstance(node.operand.value, (int, float)):
             # 简单的负数转换
-            value = -cast(ast.Constant, node.operand).value
+            value = -node.operand.value
             new_node = ast.Constant(value=value)
             return self._parse_constant(new_node)
         
@@ -221,7 +221,7 @@ class Visitor(ast.NodeVisitor):
         # 先做一次标准优化，统一字节流
         data = pickletools.optimize(self.result)
         # 按 opcode 级别解析，避免按换行切分破坏二进制数据
-        ops: List[Tuple[pickletools.OpcodeInfo, Any, int]] = list(pickletools.genops(data))
+        ops = list(pickletools.genops(data))
         if not ops:
             return data
 
@@ -237,7 +237,7 @@ class Visitor(ast.NodeVisitor):
         )
 
         # 删除紧跟在 PUT 之后、且仅使用一次的 GET
-        drop_indices: set[int] = set()
+        drop_indices = set()
         for i in range(len(ops) - 1):
             op, arg, _ = ops[i]
             next_op, next_arg, _ = ops[i + 1]
@@ -264,7 +264,7 @@ class Visitor(ast.NodeVisitor):
     def _flat(self, node: ast.AST) -> Any:
         '''递归处理基础的语句
         '''
-        _types: Dict[Any, Any] = {
+        _types = {
             ast.Constant: self._parse_constant,
             ast.List: self._parse_list,
             ast.Set: self._parse_set,
@@ -302,7 +302,7 @@ class Visitor(ast.NodeVisitor):
             items = []
             for k, v in zip(node.keys, node.values):
                 if k is None: continue
-                items.append(f"{self._to_converted_code(cast(ast.AST, k))}: {self._to_converted_code(v)}")
+                items.append(f"{self._to_converted_code(k)}: {self._to_converted_code(v)}")
             return f"{{{', '.join(items)}}}"
         elif isinstance(node, ast.Subscript):
             slice_node = node.slice
@@ -316,9 +316,9 @@ class Visitor(ast.NodeVisitor):
             args = ", ".join([self._to_converted_code(arg) for arg in node.args])
             return f"{self._to_converted_code(node.func)}({args})"
         elif isinstance(node, ast.Slice):
-            lower = self._to_converted_code(cast(ast.AST, node.lower)) if node.lower else "None"
-            upper = self._to_converted_code(cast(ast.AST, node.upper)) if node.upper else "None"
-            step = self._to_converted_code(cast(ast.AST, node.step)) if node.step else "None"
+            lower = self._to_converted_code(node.lower) if node.lower else "None"
+            upper = self._to_converted_code(node.upper) if node.upper else "None"
+            step = self._to_converted_code(node.step) if node.step else "None"
             return f"slice({lower}, {upper}, {step})"
         elif isinstance(node, ast.Constant):
             return repr(node.value)
@@ -379,7 +379,7 @@ class Visitor(ast.NodeVisitor):
             opcodes = [Opcodes.FALSE, Opcodes.BINFALSE]
             return self._check_firewall(opcodes, node=node)
 
-        value_map: Dict[Any, Any] = {
+        value_map = {
             int: __generate_int,
             float: __generate_float,
             str: __generate_str,
@@ -458,12 +458,12 @@ class Visitor(ast.NodeVisitor):
                 module_name = self.lazy_modules[targets.id]
                 full_name = f"{module_name}.{attr}"
                 if full_name not in self.names:
-                    self.names[full_name] = [cast(Optional[str], str(self.memo_id)), module_name]
+                    self.names[full_name] = [str(self.memo_id), module_name]
                     self.final_opcode += Opcodes.GLOBAL + f'{module_name}\n{attr}\n'.encode('utf-8') + Opcodes.PUT + f'{self.memo_id}\n'.encode('utf-8')
                     self.converted_code.append(f"from {module_name} import {attr}")
                     self.memo_id += 1
                     self.has_transformation = True
-                return Opcodes.GET + f'{cast(str, self.names[full_name][0])}\n'.encode('utf-8')
+                return Opcodes.GET + f'{self.names[full_name][0]}\n'.encode('utf-8')
 
         # 否则就用 getattr(obj, attr)
         getattr_id = self._ensure_builtins("getattr")
@@ -475,9 +475,9 @@ class Visitor(ast.NodeVisitor):
         slice_id = self._ensure_builtins("slice")
         self.has_transformation = True
         
-        lower = self._flat(cast(ast.AST, node.lower)) if node.lower else Opcodes.NONE
-        upper = self._flat(cast(ast.AST, node.upper)) if node.upper else Opcodes.NONE
-        step = self._flat(cast(ast.AST, node.step)) if node.step else Opcodes.NONE
+        lower = self._flat(node.lower) if node.lower else Opcodes.NONE
+        upper = self._flat(node.upper) if node.upper else Opcodes.NONE
+        step = self._flat(node.step) if node.step else Opcodes.NONE
 
         return Opcodes.GET + f'{slice_id}\n'.encode() + \
                Opcodes.MARK + lower + upper + step + \
@@ -529,7 +529,7 @@ class Visitor(ast.NodeVisitor):
             num = opcode_str[1:]
 
             imported_func = [
-                (cast(str, j[1]), i)
+                (j[1], i)
                 for i, j in self.names.items()
                 if j[0] == num and j[1]
             ]
@@ -605,7 +605,7 @@ class Visitor(ast.NodeVisitor):
         def _generate_opcode():
             for _name in node.names:
                 name = _name.asname or _name.name
-                self.names[name] = [cast(Optional[str], str(self.memo_id)), node.module]
+                self.names[name] = [str(self.memo_id), node.module]
                 self.final_opcode += Opcodes.GLOBAL + f'{node.module}\n{name}\n'.encode('utf-8') + Opcodes.PUT + f'{self.memo_id}\n'.encode('utf-8')
                 as_suffix = f" as {_name.asname}" if _name.asname else ""
                 self.converted_code.append(f"from {node.module} import {_name.name}{as_suffix}")
@@ -627,24 +627,23 @@ class Visitor(ast.NodeVisitor):
             # 2. 分析等号左边并生成指令
             if isinstance(node.targets[0], ast.Name):
                 # eg: a = ...
-                target_name = cast(ast.Name, node.targets[0])
-                name = target_name.id
+                name = node.targets[0].id
                 assign_opcode = b'{right_opcode}' + Opcodes.PUT + f'{self.memo_id}\n'.encode("utf-8")
 
-                self.names[name] = [cast(Optional[str], str(self.memo_id)), None]
+                self.names[name] = [str(self.memo_id), None]
                 self.converted_code.append(f"{name} = {right_str}")
                 self.memo_id += 1
 
             elif isinstance(node.targets[0], ast.Attribute):
                 # eg: os.system = "whoami"
-                target_attr = cast(ast.Attribute, node.targets[0])
+                target_attr = node.targets[0]
                 if isinstance(target_attr.value, ast.Name) and target_attr.value.id in self.lazy_modules:
                     module_name = self.lazy_modules[target_attr.value.id]
                     attr_name = target_attr.attr
                     full_name = f"{module_name}.{attr_name}"
 
                     if full_name not in self.names:
-                        self.names[full_name] = [cast(Optional[str], str(self.memo_id)), module_name]
+                        self.names[full_name] = [str(self.memo_id), module_name]
                         self.final_opcode += Opcodes.GLOBAL + f'{module_name}\n{attr_name}\n'.encode('utf-8') + Opcodes.PUT + f'{self.memo_id}\n'.encode('utf-8')
                         self.converted_code.append(f"from {module_name} import {attr_name}")
                         self.memo_id += 1
@@ -652,7 +651,7 @@ class Visitor(ast.NodeVisitor):
 
                     assign_opcode = b'{right_opcode}' + Opcodes.PUT + f'{self.memo_id}\n'.encode("utf-8")
 
-                    self.names[full_name] = [cast(Optional[str], str(self.memo_id)), None]
+                    self.names[full_name] = [str(self.memo_id), None]
                     self.converted_code.append(f"{attr_name} = {right_str}")
                     self.memo_id += 1
                 else:
@@ -681,7 +680,7 @@ class Visitor(ast.NodeVisitor):
 
             elif isinstance(node.targets[0], ast.Subscript):
                 # eg: a["test"] = ...
-                target_sub = cast(ast.Subscript, node.targets[0])
+                target_sub = node.targets[0]
                 slice_node = target_sub.slice
                 if isinstance(slice_node, ast.Index):
                     slice_node = getattr(slice_node, 'value')
