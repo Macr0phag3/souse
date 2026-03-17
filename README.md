@@ -58,7 +58,7 @@ transfer opcode:
 
 <img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/eg-3.png" width="600">
 
-supported:
+supported(You can customize it when calling the API):
 - [x] base64_encode
 - [x] hex_encode
 - [x] url_encode

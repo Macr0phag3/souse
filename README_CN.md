@@ -58,7 +58,7 @@ c
 
 <img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/eg-3.png" width="600">
 
-支持的转换函数:
+支持的转换函数（调用 API 的时候可以自定义）:
 - [x] base64_encode
 - [x] hex_encode
 - [x] url_encode
