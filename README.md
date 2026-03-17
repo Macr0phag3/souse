@@ -9,7 +9,7 @@ A tool for converting Python source code to opcode(pickle), source code is paylo
 
 ## 2. Key Features
 
-- **🚀 Intelligent Reconstruction**: Automatically reconstructs non-pickleable Python source code into fully compatible opcode sequences.
+- **🚀 Intelligent Reconstruction**: Automatically reconstructs non-pickleable Python source code into fully compatible opcode sequences. For complex source transforms, use [parselmouth](https://github.com/Macr0phag3/parselmouth) before souse.
 - **✨ Automated Builtins**: Built-in functions like `open`, `eval`, and `getattr` are recognized automatically—no manual import needed.
 - **🛡️ Advanced Bypass**: Auto bypass complex limitations (`R`, `o`, `i`, ...)
 - **⚡ Stealthy Optimization**: Automatically optimizes generated opcodes using `pickletools` for minimal size and maximum stealth.
@@ -17,11 +17,11 @@ A tool for converting Python source code to opcode(pickle), source code is paylo
 - **📝 Precise Debugging**: Pinpoints errors with full source code context and syntax highlighting.
 - **💡 API Support**: Convert Python source code to opcode(pickle) via API.
 
-## 2. usage
-### 2.1 CLI
-`./test/` has some example codes for souse.py.
+## 3. usage
+### 3.1 CLI
+`./souse/cases/` has some example codes for souse.py.
 
-#### 2.1.1 case 1
+#### 3.1.1 case 1
 
 source code:
 
@@ -31,7 +31,7 @@ opcode:
 
 <img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/eg-1-s.png" width="600">
 
-#### 2.1.2 case 2
+#### 3.1.2 case 2
 
 source code:
 
@@ -41,7 +41,7 @@ opcode:
 
 <img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/eg-2-s.png" width="600">
 
-#### 2.1.2 case 3
+#### 3.1.3 case 3
 
 You can control the final deserialization result by writing a variable name as the last line of the source code:
 
@@ -52,7 +52,7 @@ a["empty"] = ""
 c
 ```
 
-#### 2.1.3 case 4
+#### 3.1.4 case 4
 
 transfer opcode:
 
@@ -63,11 +63,19 @@ supported:
 - [x] hex_encode
 - [x] url_encode
 
-#### 2.1.4 test code
+#### 3.1.5 test code
 
 <img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/test.png" width="400">
 
-### 2.2 API
+#### 3.1.6 run tests
+
+```bash
+python souse/souse.py --run-test
+```
+
+- Requires `pytest`.
+
+### 3.2 API
 example:
 
 ```py
@@ -75,8 +83,9 @@ In [1]: import souse
 
 In [2]: exp = "from os import system\nsystem('whoami')"
 
-In [3]: souse.API(exp, optimized=True, transfer="b64").generate()
-Out[3]: b'Y29zCnN5c3RlbQooVndob2FtaQp0Ui4='
+In [3]: souse.API(exp, optimized=True, transfer=pickle.loads).generate()
+macr0phag3
+Out[3]: 0
 
 In [4]: import base64
 
@@ -102,7 +111,7 @@ macr0phag3
 Out[9]: 0
 ```
 
-## 3. TODO
+## 4. TODO
 - [x] support for nested expressions
 - [x] opcode bypass supported
 	- [x] auto bypass basic limitation（`V`、`S`、`I`、...）

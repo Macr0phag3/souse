@@ -1,2 +1,6 @@
 name = "souse"
-from .souse import cli, API
+
+from .api import API
+from .cli import cli
+
+__all__ = ["API", "cli"]

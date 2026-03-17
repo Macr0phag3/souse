@@ -6,14 +6,14 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="souse",
-    version="4.1",
+    version="5.0",
     author="Tr0y",
     author_email="macr0phag3@qq.com",
     description="A tool for converting Python source code to opcode(pickle)",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/Macr0phag3/souse",
-    packages=["souse"],
+    packages=["souse", "souse.opcodegen"],
     include_package_data=True,
     classifiers=[
         "Programming Language :: Python :: 3.6",

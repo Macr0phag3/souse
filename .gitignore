@@ -11,3 +11,6 @@ dist/
 build/
 .souse-result.tmp
 .eggs
+TODO
+.coverage
+.pytest_cache
