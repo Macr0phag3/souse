@@ -43,7 +43,7 @@ opcode:
 
 #### 3.1.3 示例 3
 
-You can control the final deserialization result by writing a variable name as the last line of the source code:
+你可以通过在源代码最后一行声明一个变量，来控制最终反序列化结果
 
 ```py
 c=10
