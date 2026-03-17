@@ -17,6 +17,8 @@ A tool for converting Python source code to opcode(pickle), source code is paylo
 - **📝 Precise Debugging**: Pinpoints errors with full source code context and syntax highlighting.
 - **💡 API Support**: Convert Python source code to opcode(pickle) via API.
 
+opcode supported list: [opcode](./opcodes.md)
+
 ## 3. usage
 ### 3.1 CLI
 `./souse/cases/` has some example codes for souse.py.
