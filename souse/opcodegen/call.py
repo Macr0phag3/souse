@@ -8,13 +8,13 @@ from ..tools import put_color
 def generate(gen, node: ast.Call) -> bytes:
     def _by_reduce() -> bytes:
         if isinstance(node.func, (ast.Name, ast.Call, ast.Attribute)):
+            func_opcode = gen.emit(node.func)
             args_tuple = ast.Tuple(elts=list(node.args), ctx=ast.Load())
-            opcode = gen.emit(args_tuple) + Opcodes.REDUCE
+            args_opcode = gen.emit(args_tuple)
         else:
             gen.ctx._error(node.func, f"this function call is not supported yet: {node.func.__class__}")
 
-        func_opcode = gen.emit(node.func)
-        return func_opcode + opcode
+        return func_opcode + args_opcode + Opcodes.REDUCE
 
     def _by_obj() -> bytes:
         func_opcode = gen.emit(node.func)

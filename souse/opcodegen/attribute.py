@@ -11,10 +11,16 @@ def generate(gen, node: ast.Attribute) -> bytes:
         ctx = gen.ctx
         if full_name not in ctx.names:
             ctx.names[full_name] = [str(ctx.memo_id), module_name]
-            ctx.final_opcode += Opcodes.GLOBAL + f'{module_name}\n{attr}\n'.encode('utf-8') + Opcodes.PUT + f'{ctx.memo_id}\n'.encode('utf-8')
+            opcode = (
+                Opcodes.GLOBAL
+                + f'{module_name}\n{attr}\n'.encode('utf-8')
+                + Opcodes.PUT
+                + f'{ctx.memo_id}\n'.encode('utf-8')
+            )
             ctx.converted_code.append(f"from {module_name} import {attr}")
             ctx.memo_id += 1
             ctx.has_transformation = True
+            ctx.queue_prefix_opcode(opcode)
         return Opcodes.GET + f'{ctx.names[full_name][0]}\n'.encode('utf-8')
 
     def _by_getattr() -> bytes:

@@ -15,13 +15,14 @@
 - **⚡ 极致 Payload 优化**: 内置 `pickletools` 优化逻辑，自动精简指令流，确保 Payload 体积最小且隐蔽性最高。
 - **📦 多功能转换包装**: 支持 Base64、Hex、URL 等多种编码输出，并允许自定义转换函数序列。
 - **📝 精准调试与上下文**: 提供带源码上下文的错误报告，精准定位不支持的语法结构，极大提升 Payload 开发效率。
+- **🔍 Explain 解释器**: 命令行下可查看累计 opcode、栈变化以及每条 opcode 的语义说明，便于调试和分析。
 - **💡 完善的 API 支持**: 除命令行外，支持通过 Python API 深度集成到自动化任务中。
 
 opcode 利用情况见 [opcode](./opcodes.md)
 
 ## 3. 使用方法
 ### 3.1 命令行 (CLI)
-`./souse/cases/` 目录下有一些演示代码。
+`./souse/cases/` 目录下既有演示代码，也有用于回归测试的 case 样例。
 
 #### 3.1.1 示例 1
 
@@ -76,6 +77,20 @@ python souse/souse.py --run-test
 ```
 
 - 需要安装 `pytest`
+
+开发时也可以直接运行完整测试集：
+
+```bash
+pytest -q
+```
+
+#### 3.1.7 查看 opcode explain
+
+使用 `--explain` 可以在生成完成后输出 opcode 摘要和解释视图：
+
+```bash
+python souse/souse.py -f souse/cases/combo-6.py --explain
+```
 
 ### 3.2 API
 示例:

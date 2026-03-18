@@ -15,13 +15,14 @@ A tool for converting Python source code to opcode(pickle), source code is paylo
 - **⚡ Stealthy Optimization**: Automatically optimizes generated opcodes using `pickletools` for minimal size and maximum stealth.
 - **📦 Multi-Functional Transfer**: Flexible encoding support (Base64, Hex, URL) and custom transformation sequences.
 - **📝 Precise Debugging**: Pinpoints errors with full source code context and syntax highlighting.
+- **🔍 Explain View**: Inspect cumulative opcodes, stack effects, and per-opcode meanings through the CLI explain mode.
 - **💡 API Support**: Convert Python source code to opcode(pickle) via API.
 
 opcode supported list: [opcode](./opcodes.md)
 
 ## 3. usage
 ### 3.1 CLI
-`./souse/cases/` has some example codes for souse.py.
+`./souse/cases/` contains example inputs and case-level regression samples for `souse.py`.
 
 #### 3.1.1 case 1
 
@@ -76,6 +77,20 @@ python souse/souse.py --run-test
 ```
 
 - Requires `pytest`.
+
+For the full test suite during development:
+
+```bash
+pytest -q
+```
+
+#### 3.1.7 explain opcodes
+
+Use `--explain` to print the opcode summary and explanation view after generation:
+
+```bash
+python souse/souse.py -f souse/cases/combo-6.py --explain
+```
 
 ### 3.2 API
 example:

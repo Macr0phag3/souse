@@ -6,7 +6,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="souse",
-    version="5.0.1",
+    version="5.1",
     author="Tr0y",
     author_email="macr0phag3@qq.com",
     description="A tool for converting Python source code to opcode(pickle)",

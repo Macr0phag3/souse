@@ -43,7 +43,6 @@ def generate(gen, node: ast.Assign) -> bytes:
             full_name = f"{module_name}.{attr_name}"
             right_str = gen.to_converted_code(node.value)
 
-            import_opcode = b""
             if full_name not in ctx.names:
                 # 如果没有 import，就 import
                 import_node = ast.ImportFrom(
@@ -51,11 +50,11 @@ def generate(gen, node: ast.Assign) -> bytes:
                     names=[ast.alias(name=attr_name, asname=None)],
                     level=0,
                 )
-                import_opcode = gen.emit(import_node)
+                ctx.queue_prefix_opcode(gen.emit(import_node))
                 ctx.has_transformation = True
 
             right_opcode = gen.emit(node.value)
-            assign_opcode = import_opcode + right_opcode + Opcodes.PUT + f'{ctx.memo_id}\n'.encode("utf-8")
+            assign_opcode = right_opcode + Opcodes.PUT + f'{ctx.memo_id}\n'.encode("utf-8")
 
             ctx.names[full_name] = [str(ctx.memo_id), None]
             ctx.names[attr_name] = [str(ctx.memo_id), None]
@@ -72,10 +71,10 @@ def generate(gen, node: ast.Assign) -> bytes:
             choice = gen.check_firewall([Opcodes.BUILD], node=node)
             if choice == Opcodes.BUILD:
                 # 利用 opcode BUILD 来模拟 setattr
-                right_opcode = gen.emit(node.value)
-                right_str = gen.to_converted_code(node.value)
                 left_opcode = gen.emit(target_attr.value)
                 left_str = gen.to_converted_code(target_attr.value)
+                right_opcode = gen.emit(node.value)
+                right_str = gen.to_converted_code(node.value)
                 assign_opcode = b'{left_opcode}' + Opcodes.MARK + Opcodes.NONE + Opcodes.EMPTY_DICT + b'V{attr}\n{right_opcode}' + Opcodes.SETITEM + Opcodes.TUPLE + Opcodes.BUILD
                 assign_opcode = assign_opcode \
                                 .replace(b'{left_opcode}', left_opcode) \
@@ -109,12 +108,12 @@ def generate(gen, node: ast.Assign) -> bytes:
 
         u_disabled = "u" in ctx.firewall_rules and ctx.firewall_rules["u"] == "*"
         if not u_disabled:
+            outside_str = gen.to_converted_code(target_sub.value)
+            outside_opcode = gen.emit(target_sub.value)
+            inside_opcode = gen.emit(slice_node)
+            inside_str = gen.to_converted_code(slice_node)
             right_opcode = gen.emit(node.value)
             right_str = gen.to_converted_code(node.value)
-            inside_opcode = gen.emit(slice_node)
-            outside_opcode = gen.emit(target_sub.value)
-            inside_str = gen.to_converted_code(slice_node)
-            outside_str = gen.to_converted_code(target_sub.value)
 
             # 利用 opcode SETITEMS 来模拟 __setitem__
             assign_opcode = b'{outside_opcode}' + Opcodes.MARK + b'{inside_opcode}{right_opcode}' + Opcodes.SETITEMS

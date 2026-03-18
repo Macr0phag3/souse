@@ -23,7 +23,8 @@ def generate(gen, node: ast.Name) -> bytes:
                     level=0,
                 )
                 gen.ctx.has_transformation = True
-                return gen.emit(import_node)
+                gen.ctx.queue_prefix_opcode(gen.emit(import_node))
+                return Opcodes.GET + f"{gen.ctx.names[node.id][0]}\n".encode("utf-8")
 
             elif node.id in ctx.lazy_modules:
                 # 自动处理已导入的模块：__import__(module_name)
@@ -40,7 +41,8 @@ def generate(gen, node: ast.Name) -> bytes:
                 ctx.memo_id += 1
                 gen.ctx.has_transformation = True
                 ctx.converted_code.append(f'{node.id} = __import__({module_name!r})')
-                return opcode
+                gen.ctx.queue_prefix_opcode(opcode)
+                return Opcodes.GET + f"{ctx.names[node.id][0]}\n".encode("utf-8")
             else:
                 # 说明之前没有定义这个变量
                 ctx._error(node, f"this var is not defined: {node.id}")

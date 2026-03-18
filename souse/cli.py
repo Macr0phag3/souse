@@ -10,7 +10,7 @@ from .api import API
 from .tools import FUNC_NAME, transfer_funcs, put_color
 
 
-VERSION = '5.0.1'
+VERSION = '5.1'
 LOGO = (
     f'''
   ██████  ▒█████   █    ██   ██████ ▓█████ 
@@ -59,6 +59,10 @@ def cli() -> None:
         "-t", "--transfer", default=None,
         help=f"transfer result with: { {i for i in FUNC_NAME.values()} }"
     )
+    parser.add_argument(
+        "--explain", action="store_true",
+        help="show opcode summary and explanation view"
+    )
 
     args = parser.parse_args()
 
@@ -66,6 +70,7 @@ def cli() -> None:
     need_optimize = args.no_optimize
     run_test = args.run_test
     transfer = args.transfer
+    explain = args.explain
     transfer_func = transfer_funcs(transfer)
 
     if run_test:
@@ -140,7 +145,8 @@ def cli() -> None:
                 correct = answer == str(visitor.result)
                 if correct:
                     print(tip("green"))
-                    continue
+                    if not explain:
+                        continue
                 else:
                     print(tip("yellow"))
             else:
@@ -164,6 +170,10 @@ def cli() -> None:
             print(f'  [-] converted code: ')
             for line in visitor.converted_code:
                 print(f'      {put_color(line, "gray")}')
+
+        if explain:
+            explain_data = visitor.optimize() if need_optimize else visitor.result
+            print(visitor.explain(explain_data))
 
         if run_test:
             loc = [

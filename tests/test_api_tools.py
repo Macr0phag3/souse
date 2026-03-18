@@ -1,5 +1,7 @@
 import base64
 import pickle
+import pickletools
+from pathlib import Path
 
 import pytest
 
@@ -69,3 +71,14 @@ def test_mass_assignment_unsupported():
     source = "a, b = 1, 2"
     with pytest.raises(RuntimeError):
         API(source, optimized=False, transfer="").generate()
+
+
+def test_optimize_handles_combo_7_case_without_invalid_memo_order():
+    source = Path("souse/cases/combo-7.py").read_text()
+    visitor = API(source, optimized=False, transfer="")._generate()
+
+    optimized = visitor.optimize()
+
+    assert optimized
+    assert list(pickletools.genops(visitor.result))
+    assert list(pickletools.genops(optimized))

@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional
 from .opcodegen import OpcodeGenerator
 from .opcodes import Opcodes
 from .tools import put_color
+from .explain import explain as explain_opcodes
 
 
 class Visitor(OpcodeGenerator, ast.NodeVisitor):
@@ -21,6 +22,7 @@ class Visitor(OpcodeGenerator, ast.NodeVisitor):
         self.lazy_modules = {}  # import requests -> {'requests': 'requests'}
 
         self.final_opcode = b''
+        self.pending_prefix_opcodes = []
         self.code = ""
         self.result = b""
         self.converted_code = []
@@ -29,6 +31,16 @@ class Visitor(OpcodeGenerator, ast.NodeVisitor):
 
     def souse(self) -> None:
         self.result = self.final_opcode + Opcodes.STOP
+
+    def queue_prefix_opcode(self, opcode: bytes) -> None:
+        self.pending_prefix_opcodes.append(opcode)
+
+    def consume_prefix_opcodes(self) -> bytes:
+        if not self.pending_prefix_opcodes:
+            return b""
+        opcode = b"".join(self.pending_prefix_opcodes)
+        self.pending_prefix_opcodes.clear()
+        return opcode
 
     def _error(self, node: Optional[ast.AST], msg: str) -> None:
         context = ""
@@ -125,6 +137,10 @@ class Visitor(OpcodeGenerator, ast.NodeVisitor):
         )
         return pickletools.optimize(rebuilt)
 
+    def explain(self, data: Optional[bytes] = None) -> str:
+        data = self.result if data is None else data
+        return explain_opcodes(data)
+
     def visit_Import(self, node: ast.Import) -> None:
         # eg: import os
         # eg: import os as o
@@ -149,14 +165,14 @@ class Visitor(OpcodeGenerator, ast.NodeVisitor):
             self.source_code.split('\n')[start:end]  # type: ignore
         ), "white")
         opcode = self.gen.emit(node)
-        self.final_opcode += opcode
+        self.final_opcode += self.consume_prefix_opcodes() + opcode
 
     def _visit_expr_stmt(self, node: ast.AST) -> None:
         # 统一处理“表达式语句”
         def _generate_opcode():
             opcode = self.gen.emit(node)
             self.converted_code.append(self.gen.to_converted_code(node))
-            self.final_opcode += opcode
+            self.final_opcode += self.consume_prefix_opcodes() + opcode
 
         start = node.lineno - 1
         end = getattr(node, 'end_lineno', None)
