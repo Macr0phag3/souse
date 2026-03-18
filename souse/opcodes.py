@@ -13,6 +13,8 @@ class Opcodes:
     FLOAT = b'F'
     STRING = b'V'
     BINSTRING = b'S'
+    BINUNICODE = b'X'
+    SHORT_BINUNICODE = b'\x8c'
     NONE = b'N'
     TRUE = b'I01\n'
     BINTRUE = b'\x88'
