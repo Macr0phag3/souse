@@ -11,6 +11,7 @@ class Opcodes:
     BININT1 = b'K'
     BININT2 = b'M'
     FLOAT = b'F'
+    BINFLOAT = b'G'
     STRING = b'V'
     BINSTRING = b'S'
     BINUNICODE = b'X'
