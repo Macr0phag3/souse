@@ -8,6 +8,8 @@ class Opcodes:
     # Basic types
     INT = b'I'
     BININT = b'J'
+    BININT1 = b'K'
+    BININT2 = b'M'
     FLOAT = b'F'
     STRING = b'V'
     BINSTRING = b'S'
