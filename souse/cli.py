@@ -177,8 +177,13 @@ def cli() -> None:
             print(f'  [-] answer for test:    {answer}')
 
     if run_test:
+        tests_dir = os.path.join(os.getcwd(), "tests")
+        if not os.path.isdir(tests_dir):
+            print("\n[*] pytest skipped (no tests/)")
+            return
+
         try:
-            import pytest, coverage  # noqa: F401
+            import pytest, pytest_cov  # noqa: F401
         except Exception:
             print("\n[!] pytest and coverage is not installed; skip running pytest -q")
         else:
