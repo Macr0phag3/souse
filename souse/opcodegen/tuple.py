@@ -29,7 +29,9 @@ def generate(gen, node: ast.Tuple) -> bytes:
         Opcodes.TUPLE: _by_tuple,
     }
 
-    if len(node.elts) == 1:
+    if not node.elts:
+        bypass_map[Opcodes.EMPTY_TUPLE] = lambda: Opcodes.EMPTY_TUPLE
+    elif len(node.elts) == 1:
         bypass_map[Opcodes.TUPLE1] = _by_tuple1
     elif len(node.elts) == 2:
         bypass_map[Opcodes.TUPLE2] = _by_tuple2

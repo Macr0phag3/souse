@@ -96,6 +96,39 @@ def test_small_tuple_can_bypass_to_tuple1_tuple2_tuple3():
     assert pickle.loads(result3) == (1, 2, 3)
 
 
+def test_empty_containers_can_bypass_to_empty_opcodes():
+    list_result = API("a = []", firewall_rules=["l"], optimized=False, transfer="").generate()
+    tuple_result = API("a = ()", firewall_rules=["t"], optimized=False, transfer="").generate()
+    dict_result = API("a = {}", firewall_rules=["d"], optimized=False, transfer="").generate()
+
+    assert list_result.startswith(b"]")
+    assert tuple_result.startswith(b")")
+    assert dict_result.startswith(b"}")
+    assert pickle.loads(list_result) == []
+    assert pickle.loads(tuple_result) == ()
+    assert pickle.loads(dict_result) == {}
+
+
+def test_list_and_dict_can_bypass_to_appends_and_setitems():
+    list_result = API("a = [1, 2]", firewall_rules=["l"], optimized=False, transfer="").generate()
+    dict_result = API("a = {'x': 1, 'y': 2}", firewall_rules=["d"], optimized=False, transfer="").generate()
+
+    assert list_result.startswith(b"](")
+    assert b"e" in list_result
+    assert dict_result.startswith(b"}(")
+    assert b"u" in dict_result
+    assert pickle.loads(list_result) == [1, 2]
+    assert pickle.loads(dict_result) == {"x": 1, "y": 2}
+
+
+def test_set_can_bypass_to_additems():
+    result = API("a = {1, 2}", firewall_rules=["R"], optimized=False, transfer="").generate()
+
+    assert result.startswith(b"\x8f(")
+    assert b"\x90" in result
+    assert pickle.loads(result) == {1, 2}
+
+
 def test_mass_assignment_unsupported():
     source = "a, b = 1, 2"
     with pytest.raises(RuntimeError):

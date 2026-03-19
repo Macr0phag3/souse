@@ -4,7 +4,7 @@ from ..opcodes import Opcodes
 
 
 def generate(gen, node: ast.Set) -> bytes:
-    def _by_set() -> bytes:
+    def _add_empty_set() -> bytes:
         # PVM Protocol 4
         return (
             Opcodes.EMPTY_SET + b"(" +
@@ -13,6 +13,6 @@ def generate(gen, node: ast.Set) -> bytes:
         )
 
     bypass_map = {
-        Opcodes.ADDITEMS: _by_set,
+        Opcodes.ADDITEMS: _add_empty_set,
     }
     return gen.generate_with_firewall(bypass_map, node=node)

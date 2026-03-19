@@ -28,7 +28,10 @@ class Opcodes:
 
     # 集合类型
     MARK = b'('
+    EMPTY_LIST = b']'
+    APPENDS = b'e'
     LIST = b'l'
+    EMPTY_TUPLE = b')'
     TUPLE = b't'
     TUPLE1 = b'\x85'
     TUPLE2 = b'\x86'

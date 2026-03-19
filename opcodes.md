@@ -33,10 +33,10 @@
 | \x55 | `U` | SHORT_BINSTRING | 1 | 所有版本 |  |  | 推入一个 Python 字符串对象。有两个参数：第一个是 1 字节的无符号整数，表示字符串的字节数；第二个是相同数量的字节，直接作为字符串内容。通常解码为 str 实例。 |
 | \x58 | `X` | BINUNICODE | 1 | 所有版本 | ✅ | 构造字符串 | 推入一个 Python Unicode 字符串对象。有两个参数：第一个是 4 字节小端无符号整数表示字节数。第二个是 UTF-8 编码的 Unicode 字符串数据。 |
 | \x47 | `G` | BINFLOAT | 1 | 所有版本 | ✅ | 构造浮点数 | 以二进制形式存储的浮点数，包含 8 字节数据。通常比 FLOAT 编码节省一半以上的空间。通常 BINFLOAT 不能用于传输无穷大、NaN 或负零，如果指数超过 IEEE-754 双精度范围则抛出异常，并且精度保留不超过 53 位。 |
-| \x5d | `]` | EMPTY_LIST | 1 | 所有版本 |  |  | 推入一个空列表。 |
-| \x65 | `e` | APPENDS | 1 | 所有版本 |  |  | 将栈上的一段对象切片扩展到列表中。栈变化：`... pylist markobject stackslice -> ... pylist+stackslice`。实际上 pylist 是原地扩展的。 |
-| \x29 | `)` | EMPTY_TUPLE | 1 | 所有版本 |  |  | 推入一个空元组。 |
-| \x7d | `}` | EMPTY_DICT | 1 | 所有版本 | ✅ | 构造空字典（用于 BUILD） | 推入一个空字典。 |
+| \x5d | `]` | EMPTY_LIST | 1 | 所有版本 | ✅ | 构造空列表 | 推入一个空列表。 |
+| \x65 | `e` | APPENDS | 1 | 所有版本 | ✅ | 构造非空列表 | 将栈上的一段对象切片扩展到列表中。栈变化：`... pylist markobject stackslice -> ... pylist+stackslice`。实际上 pylist 是原地扩展的。 |
+| \x29 | `)` | EMPTY_TUPLE | 1 | 所有版本 | ✅ | 构造空元组 | 推入一个空元组。 |
+| \x7d | `}` | EMPTY_DICT | 1 | 所有版本 | ✅ | 构造空字典 | 推入一个空字典。 |
 | \x75 | `u` | SETITEMS | 1 | 所有版本 | ✅ | 下标赋值(模拟 `setitem`) | 向现有字典添加任意数量的键值对。栈中 markobject 之后的内容作为键值交替序列，添加到 markobject 下方的字典中。 |
 | \x31 | `1` | POP_MARK | 1 | 所有版本 |  |  | 弹出栈中 markobject 及其以上的所有对象。当使用变长对象的指令完成时，使用 POP_MARK 清理栈。 |
 | \x68 | `h` | BINGET | 1 | 所有版本 |  |  | 从 memo 中读取对象。索引由随后的 1 字节无符号整数给出。 |
