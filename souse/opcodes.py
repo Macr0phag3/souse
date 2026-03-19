@@ -46,6 +46,7 @@ class Opcodes:
     INST = b'i'
     GLOBAL = b'c'
     PUT = b'p'
+    MEMOIZE = b'\x94'
     GET = b'g'
     STOP = b'.'
 

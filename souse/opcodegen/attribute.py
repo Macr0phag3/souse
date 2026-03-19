@@ -1,6 +1,7 @@
 import ast
 
 from ..opcodes import Opcodes
+from .put_memo import generate as put_memo
 
 
 def generate(gen, node: ast.Attribute) -> bytes:
@@ -10,15 +11,13 @@ def generate(gen, node: ast.Attribute) -> bytes:
         """
         ctx = gen.ctx
         if full_name not in ctx.names:
-            ctx.names[full_name] = [str(ctx.memo_id), module_name]
-            opcode = (
-                Opcodes.GLOBAL
-                + f'{module_name}\n{attr}\n'.encode('utf-8')
-                + Opcodes.PUT
-                + f'{ctx.memo_id}\n'.encode('utf-8')
+            opcode, memo_name = put_memo(
+                gen,
+                Opcodes.GLOBAL + f'{module_name}\n{attr}\n'.encode('utf-8'),
+                node=node,
             )
+            ctx.names[full_name] = [memo_name, module_name]
             ctx.converted_code.append(f"from {module_name} import {attr}")
-            ctx.memo_id += 1
             ctx.has_transformation = True
             ctx.queue_prefix_opcode(opcode)
         return Opcodes.GET + f'{ctx.names[full_name][0]}\n'.encode('utf-8')

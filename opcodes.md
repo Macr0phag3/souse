@@ -65,7 +65,7 @@
 | \x8f |  | EMPTY_SET | 4 | 3.4+ | ✅ | 辅助构造 set | 推入一个空 set。 |
 | \x90 |  | ADDITEMS | 4 | 3.4+ | ✅ | 辅助构造 set| 向现有 set 添加任意数量的项。markobject 之后的内容作为项序列添加到其下方的 set 中。 |
 | \x91 |  | FROZENSET | 4 | 3.4+ |  |  | 根据栈顶的一段构建 frozenset。例如：`... markobject 1 2 3 -> ... frozenset({1, 2, 3})`。 |
-| \x94 |  | MEMOIZE | 4 | 3.4+ |  |  | 将栈顶存储到 memo。索引为当前 memo 中元素的数量。 |
+| \x94 |  | MEMOIZE | 4 | 3.4+ | ✅ | 写入 memo | 将栈顶存储到 memo。索引为当前 memo 中元素的数量。 |
 | \x93 |  | STACK_GLOBAL | 4 | 3.4+ |  |  | 将一个全局对象 (module.attr) 推入栈。 |
 | \x92 |  | NEWOBJ_EX | 4 | 3.4+ | ✅ | 构建类实例 | 构建对象实例。栈内容被视为类对象、参数元组和关键字参数字典。调用 `cls.__new__(cls, *args, **kwargs)` 并推回结果。 |
 | \x95 |  | FRAME | 4 | 3.4+ |  |  | 指示新帧的开始。反序列化器可以使用此指令安全地预取数据。 |

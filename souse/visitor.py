@@ -110,7 +110,7 @@ class Visitor(ast.NodeVisitor):
             except Exception:
                 return arg
 
-        put_ops = {"PUT", "BINPUT", "LONG_BINPUT"}
+        put_ops = {"PUT", "BINPUT", "LONG_BINPUT", "MEMOIZE"}
         get_ops = {"GET", "BINGET", "LONG_BINGET"}
 
         # 先做一次标准优化，统一字节流

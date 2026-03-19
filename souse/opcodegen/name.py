@@ -2,6 +2,7 @@ import ast
 import builtins
 
 from ..opcodes import Opcodes
+from .put_memo import generate as put_memo
 
 
 def generate(gen, node: ast.Name) -> bytes:
@@ -34,11 +35,9 @@ def generate(gen, node: ast.Name) -> bytes:
                     args=[ast.Constant(value=module_name)],
                     keywords=[],
                 )
-                opcode = gen.emit(import_call)
-                opcode += Opcodes.PUT + f'{ctx.memo_id}\n'.encode('utf-8')
+                opcode, memo_name = put_memo(gen, gen.emit(import_call), node=node)
 
-                ctx.names[node.id] = [str(ctx.memo_id), None]
-                ctx.memo_id += 1
+                ctx.names[node.id] = [memo_name, None]
                 gen.ctx.has_transformation = True
                 ctx.converted_code.append(f'{node.id} = __import__({module_name!r})')
                 gen.ctx.queue_prefix_opcode(opcode)

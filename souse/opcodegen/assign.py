@@ -2,6 +2,7 @@ import ast
 
 from ..opcodes import Opcodes
 from ..tools import put_color
+from .put_memo import generate as put_memo
 
 
 def generate(gen, node: ast.Assign) -> bytes:
@@ -24,11 +25,10 @@ def generate(gen, node: ast.Assign) -> bytes:
         name = node.targets[0].id
         right_opcode = gen.emit(node.value)
         right_str = gen.to_converted_code(node.value)
-        assign_opcode = right_opcode + Opcodes.PUT + f'{ctx.memo_id}\n'.encode("utf-8")
+        assign_opcode, memo_name = put_memo(gen, right_opcode, node=node)
 
-        ctx.names[name] = [str(ctx.memo_id), None]
+        ctx.names[name] = [memo_name, None]
         ctx.converted_code.append(f"{name} = {right_str}")
-        ctx.memo_id += 1
         return assign_opcode
 
     elif isinstance(node.targets[0], ast.Attribute):
@@ -54,12 +54,11 @@ def generate(gen, node: ast.Assign) -> bytes:
                 ctx.has_transformation = True
 
             right_opcode = gen.emit(node.value)
-            assign_opcode = right_opcode + Opcodes.PUT + f'{ctx.memo_id}\n'.encode("utf-8")
+            assign_opcode, memo_name = put_memo(gen, right_opcode, node=node)
 
-            ctx.names[full_name] = [str(ctx.memo_id), None]
-            ctx.names[attr_name] = [str(ctx.memo_id), None]
+            ctx.names[full_name] = [memo_name, None]
+            ctx.names[attr_name] = [memo_name, None]
             ctx.converted_code.append(f"{attr_name} = {right_str}")
-            ctx.memo_id += 1
             return assign_opcode
 
         else:

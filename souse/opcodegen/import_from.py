@@ -1,6 +1,7 @@
 import ast
 
 from ..opcodes import Opcodes
+from .put_memo import generate as put_memo
 
 
 def generate(gen, node: ast.ImportFrom) -> bytes:
@@ -12,11 +13,12 @@ def generate(gen, node: ast.ImportFrom) -> bytes:
         opcode = b""
         for _name in node.names:
             name = _name.asname or _name.name
-            ctx.names[name] = [str(ctx.memo_id), node.module]
-            opcode += Opcodes.GLOBAL + f'{node.module}\n{name}\n'.encode('utf-8') + Opcodes.PUT + f'{ctx.memo_id}\n'.encode('utf-8')
+            global_opcode = Opcodes.GLOBAL + f'{node.module}\n{name}\n'.encode('utf-8')
+            stored_opcode, memo_name = put_memo(gen, global_opcode, node=node)
+            ctx.names[name] = [memo_name, node.module]
+            opcode += stored_opcode
             as_suffix = f" as {_name.asname}" if _name.asname else ""
             ctx.converted_code.append(f"from {node.module} import {_name.name}{as_suffix}")
-            ctx.memo_id += 1
         return opcode
 
     bypass_map = {

@@ -129,6 +129,13 @@ def test_set_can_bypass_to_additems():
     assert pickle.loads(result) == {1, 2}
 
 
+def test_memo_can_bypass_to_memoize():
+    result = API("a = 1\na", firewall_rules=["p"], optimized=False, transfer="").generate()
+
+    assert b"\x94" in result
+    assert pickle.loads(result) == 1
+
+
 def test_mass_assignment_unsupported():
     source = "a, b = 1, 2"
     with pytest.raises(RuntimeError):
