@@ -9,7 +9,7 @@ from .api import API
 from .tools import FUNC_NAME, transfer_funcs, put_color
 
 
-VERSION = '5.3'
+VERSION = '5.4'
 LOGO = (
     f'''
   ██████  ▒█████   █    ██   ██████ ▓█████ 
