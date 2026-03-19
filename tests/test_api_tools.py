@@ -83,6 +83,19 @@ def test_huge_int_can_bypass_to_long4():
     assert pickle.loads(result) == 1 << 3000
 
 
+def test_small_tuple_can_bypass_to_tuple1_tuple2_tuple3():
+    result1 = API("a = (1,)", firewall_rules=["t"], optimized=False, transfer="").generate()
+    result2 = API("a = (1, 2)", firewall_rules=["t"], optimized=False, transfer="").generate()
+    result3 = API("a = (1, 2, 3)", firewall_rules=["t"], optimized=False, transfer="").generate()
+
+    assert b"\x85" in result1
+    assert b"\x86" in result2
+    assert b"\x87" in result3
+    assert pickle.loads(result1) == (1,)
+    assert pickle.loads(result2) == (1, 2)
+    assert pickle.loads(result3) == (1, 2, 3)
+
+
 def test_mass_assignment_unsupported():
     source = "a, b = 1, 2"
     with pytest.raises(RuntimeError):

@@ -100,7 +100,7 @@ def generate(gen, node: ast.Assign) -> bytes:
 
             return gen.generate_with_firewall(
                 {
-                    "b": _by_build,
+                    Opcodes.BUILD: _by_build,
                     "setattr": _by_setattr,
                 },
                 node=node,
@@ -151,7 +151,7 @@ def generate(gen, node: ast.Assign) -> bytes:
 
         return gen.generate_with_firewall(
             {
-                "u": _by_setitems,
+                Opcodes.SETITEMS: _by_setitems,
                 "__setitem__": _by_magic_setitem,
             },
             node=node,

@@ -13,6 +13,6 @@ def generate(gen, node: ast.Set) -> bytes:
         )
 
     bypass_map = {
-        "\\x90": _by_set,
+        Opcodes.ADDITEMS: _by_set,
     }
     return gen.generate_with_firewall(bypass_map, node=node)

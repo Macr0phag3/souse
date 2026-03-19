@@ -30,6 +30,9 @@ class Opcodes:
     MARK = b'('
     LIST = b'l'
     TUPLE = b't'
+    TUPLE1 = b'\x85'
+    TUPLE2 = b'\x86'
+    TUPLE3 = b'\x87'
     DICT = b'd'
     EMPTY_SET = b'\x8f'
     ADDITEMS = b'\x90'
@@ -177,7 +180,7 @@ class OpcodeGenerator:
 
     def generate_with_firewall(
         self,
-        bypass_map: Dict[str, Callable[[], bytes | None]],
+        bypass_map: Dict[bytes | str, Callable[[], bytes | None]],
         node: Optional[ast.AST] = None,
     ) -> bytes:
         """
@@ -185,6 +188,13 @@ class OpcodeGenerator:
         尝试所有 bypass 选项
         直到找到一个不被防火墙拦截的写法
         """
+        def display_label(label: bytes | str) -> str:
+            if isinstance(label, str):
+                return label
+            try:
+                return label.decode().strip()
+            except UnicodeDecodeError:
+                return f"\\x{label[0]:02x}"
 
         rejected_by_firewall = {}
 
@@ -201,13 +211,14 @@ class OpcodeGenerator:
                 self._restore_ctx(snapshot)
                 continue
 
+            prefix_count = len(self.ctx.pending_prefix_opcodes)
             blocked_opcodes = self._get_blocked_rules(
-                b"".join(snapshot["pending_prefix_opcodes"]) + payload
+                b"".join(self.ctx.pending_prefix_opcodes[prefix_count:]) + payload
             )
             if blocked_opcodes:
                 # 被防火墙 ban 了，记录下来
                 # 恢复现场后继续下一个
-                rejected_by_firewall[label] = blocked_opcodes
+                rejected_by_firewall[display_label(label)] = blocked_opcodes
                 self._restore_ctx(snapshot)
                 continue
 
@@ -217,7 +228,7 @@ class OpcodeGenerator:
                 for rules in rejected_by_firewall.values():
                     merged_rules.extend(rules)
                 merged_rules = list(dict.fromkeys(merged_rules))
-                log_key = (label, tuple(merged_rules))
+                log_key = (display_label(label), tuple(merged_rules))
                 self.ctx.bypass_choice_counts[log_key] = self.ctx.bypass_choice_counts.get(log_key, 0) + 1
 
             return payload
@@ -230,7 +241,7 @@ class OpcodeGenerator:
 
         self.ctx._error(
             node,
-            f"NO bypass is applicable: {put_color(list(bypass_map), 'white')}",
+            f"NO bypass is applicable: {put_color([display_label(label) for label in bypass_map], 'white')}",
         )
 
     def to_converted_code(self, node: ast.AST, is_assignment: bool = False) -> str:

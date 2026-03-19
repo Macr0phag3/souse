@@ -50,6 +50,6 @@ def generate(gen, node: ast.Name) -> bytes:
         return Opcodes.GET + f'{memo_name}\n'.encode('utf-8')
 
     bypass_map = {
-        "g": _by_get,
+        Opcodes.GET: _by_get,
     }
     return gen.generate_with_firewall(bypass_map, node=node)

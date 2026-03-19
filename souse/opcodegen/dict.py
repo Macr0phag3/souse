@@ -12,6 +12,6 @@ def generate(gen, node: ast.Dict) -> bytes:
         )
 
     bypass_map = {
-        "d": _by_dict,
+        Opcodes.DICT: _by_dict,
     }
     return gen.generate_with_firewall(bypass_map, node=node)

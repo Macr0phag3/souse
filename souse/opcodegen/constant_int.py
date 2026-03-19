@@ -29,16 +29,16 @@ def generate(gen, node: ast.Constant) -> bytes:
         return Opcodes.LONG4 + struct.pack("<I", len(encoded)) + encoded
 
     bypass_map = {
-        "I": _by_int,
+        Opcodes.INT: _by_int,
     }
     if -(2 ** 31) <= value <= (2 ** 31 - 1):
-        bypass_map["J"] = _by_binint
+        bypass_map[Opcodes.BININT] = _by_binint
     if 0 <= value <= 0xFF:
-        bypass_map["K"] = _by_binint1
+        bypass_map[Opcodes.BININT1] = _by_binint1
     if 0 <= value <= 0xFFFF:
-        bypass_map["M"] = _by_binint2
+        bypass_map[Opcodes.BININT2] = _by_binint2
     if len(pickle.encode_long(value)) < 0x100:
-        bypass_map["\\x8a"] = _by_long1
-    bypass_map["\\x8b"] = _by_long4
+        bypass_map[Opcodes.LONG1] = _by_long1
+    bypass_map[Opcodes.LONG4] = _by_long4
 
     return gen.generate_with_firewall(bypass_map, node=node)

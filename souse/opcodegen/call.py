@@ -69,15 +69,15 @@ def generate(gen, node: ast.Call) -> bytes:
         return func_opcode + args_opcode + kwargs_opcode + Opcodes.NEWOBJ_EX
 
     bypass_map = {
-        "R": _by_reduce,
-        "o": _by_obj,
-        "i": _by_inst,
+        Opcodes.REDUCE: _by_reduce,
+        Opcodes.OBJ: _by_obj,
+        Opcodes.INST: _by_inst,
     }
 
     if not node.keywords:
-        bypass_map["\\x81"] = lambda: _by_newobj_like(False)
+        bypass_map[Opcodes.NEWOBJ] = lambda: _by_newobj_like(False)
 
     if node.keywords:
-        bypass_map["\\x92"] = lambda: _by_newobj_like(True)
+        bypass_map[Opcodes.NEWOBJ_EX] = lambda: _by_newobj_like(True)
 
     return gen.generate_with_firewall(bypass_map, node=node)

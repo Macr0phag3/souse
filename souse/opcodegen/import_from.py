@@ -20,6 +20,6 @@ def generate(gen, node: ast.ImportFrom) -> bytes:
         return opcode
 
     bypass_map = {
-        "c": _by_global,
+        Opcodes.GLOBAL: _by_global,
     }
     return gen.generate_with_firewall(bypass_map, node=node)
