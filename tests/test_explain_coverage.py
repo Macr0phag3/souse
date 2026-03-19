@@ -1,4 +1,3 @@
-import json
 import pickletools
 from pathlib import Path
 
@@ -7,12 +6,13 @@ from souse.explain import EXPLAINED_OPS, explain
 from souse.opcodes import Opcodes
 
 
-def _load_firewall_rules(source: str) -> dict:
+def _load_firewall_rules(source: str) -> list[str]:
     for line in source.splitlines():
         stripped = line.strip()
         if stripped.startswith("# firewall:"):
-            return json.loads(stripped[len("# firewall:"):].strip())
-    return {}
+            payload = stripped[len("# firewall:"):].strip()
+            return [item.strip() for item in payload.split(",") if item.strip()]
+    return []
 
 
 def _opcode_name_from_bytes(value: bytes) -> str:

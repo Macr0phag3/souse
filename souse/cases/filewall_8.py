@@ -1,3 +1,3 @@
 a = "abc"
-# firewall: {"V": "*"}
+# firewall: V
 # b"S'abc'\np0\n."

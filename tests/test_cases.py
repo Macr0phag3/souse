@@ -1,5 +1,4 @@
 import ast
-import json
 from pathlib import Path
 
 import pytest
@@ -10,12 +9,13 @@ from souse.api import API
 CASE_DIR = Path("souse/cases")
 
 
-def _load_firewall_rules(source: str) -> dict:
+def _load_firewall_rules(source: str) -> list[str]:
     for line in source.splitlines():
         stripped = line.strip()
         if stripped.startswith("# firewall:"):
-            return json.loads(stripped[len("# firewall:"):].strip())
-    return {}
+            payload = stripped[len("# firewall:"):].strip()
+            return [item.strip() for item in payload.split(",") if item.strip()]
+    return []
 
 
 def _load_expected_bytes(source: str) -> bytes:

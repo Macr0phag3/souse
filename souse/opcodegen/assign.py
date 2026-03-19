@@ -68,8 +68,7 @@ def generate(gen, node: ast.Assign) -> bytes:
             # 这里的 os.path 就是不是模块
             attr_name = target_attr.attr
 
-            choice = gen.check_firewall([Opcodes.BUILD], node=node)
-            if choice == Opcodes.BUILD:
+            def _by_build() -> bytes:
                 # 利用 opcode BUILD 来模拟 setattr
                 left_opcode = gen.emit(target_attr.value)
                 left_str = gen.to_converted_code(target_attr.value)
@@ -82,9 +81,9 @@ def generate(gen, node: ast.Assign) -> bytes:
                                 .replace(b'{right_opcode}', right_opcode)
                 ctx.converted_code.append(f"{left_str}.{attr_name} = {right_str}")
                 return assign_opcode
-            else:
+
+            def _by_setattr() -> bytes:
                 # 使用 setattr(obj, attr, val)
-                print(f"[*] choice {put_color('setattr', 'blue')} to bypass rule: {put_color({'b': '*'}, 'white')}")
                 ctx.has_transformation = True
                 call_node = ast.Call(
                     func=ast.Name(id="setattr", ctx=ast.Load()),
@@ -99,6 +98,14 @@ def generate(gen, node: ast.Assign) -> bytes:
                 ctx.converted_code.append(gen.to_converted_code(call_node))
                 return assign_opcode
 
+            return gen.generate_with_firewall(
+                {
+                    "b": _by_build,
+                    "setattr": _by_setattr,
+                },
+                node=node,
+            )
+
     elif isinstance(node.targets[0], ast.Subscript):
         # eg: a["test"] = ...
         target_sub = node.targets[0]
@@ -106,8 +113,7 @@ def generate(gen, node: ast.Assign) -> bytes:
         if isinstance(slice_node, ast.Index):
             slice_node = getattr(slice_node, 'value')
 
-        u_disabled = "u" in ctx.firewall_rules and ctx.firewall_rules["u"] == "*"
-        if not u_disabled:
+        def _by_setitems() -> bytes:
             outside_str = gen.to_converted_code(target_sub.value)
             outside_opcode = gen.emit(target_sub.value)
             inside_opcode = gen.emit(slice_node)
@@ -123,9 +129,9 @@ def generate(gen, node: ast.Assign) -> bytes:
                             .replace(b'{right_opcode}', right_opcode)
             ctx.converted_code.append(f"{outside_str}[{inside_str}] = {right_str}")
             return assign_opcode
-        else:
+
+        def _by_magic_setitem() -> bytes:
             # 使用 getattr(obj, "__setitem__")(key, val)
-            print(f"[*] choice {put_color('__setitem__', 'blue')} to bypass rule: {put_color({'u': '*'}, 'white')}")
             ctx.has_transformation = True
             call_node = ast.Call(
                 func=ast.Call(
@@ -142,6 +148,14 @@ def generate(gen, node: ast.Assign) -> bytes:
             assign_opcode = gen.emit(call_node)
             ctx.converted_code.append(gen.to_converted_code(call_node))
             return assign_opcode
+
+        return gen.generate_with_firewall(
+            {
+                "u": _by_setitems,
+                "__setitem__": _by_magic_setitem,
+            },
+            node=node,
+        )
 
     else:
         raise RuntimeError(

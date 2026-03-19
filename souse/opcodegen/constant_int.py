@@ -20,14 +20,13 @@ def generate(gen, node: ast.Constant) -> bytes:
         return Opcodes.BININT + struct.pack("<i", value)
 
     bypass_map = {
-        Opcodes.INT: _by_int,
+        "I": _by_int,
     }
     if -(2 ** 31) <= value <= (2 ** 31 - 1):
-        bypass_map[Opcodes.BININT] = _by_binint
+        bypass_map["J"] = _by_binint
     if 0 <= value <= 0xFF:
-        bypass_map[Opcodes.BININT1] = _by_binint1
+        bypass_map["K"] = _by_binint1
     if 0 <= value <= 0xFFFF:
-        bypass_map[Opcodes.BININT2] = _by_binint2
+        bypass_map["M"] = _by_binint2
 
-    choice = gen.check_firewall(list(bypass_map.keys()))
-    return bypass_map[choice]()
+    return gen.generate_with_firewall(bypass_map, node=node)

@@ -12,8 +12,7 @@ def generate(gen, node: ast.Constant) -> bytes:
         return Opcodes.BINFLOAT + struct.pack(">d", node.value)
 
     bypass_map = {
-        Opcodes.FLOAT: _by_float,
-        Opcodes.BINFLOAT: _by_binfloat,
+        "F": _by_float,
+        "G": _by_binfloat,
     }
-    choice = gen.check_firewall(list(bypass_map.keys()))
-    return bypass_map[choice]()
+    return gen.generate_with_firewall(bypass_map, node=node)

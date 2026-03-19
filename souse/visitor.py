@@ -5,7 +5,7 @@ import tempfile
 import subprocess
 import os
 from collections import Counter
-from typing import Any, Dict, Optional
+from typing import Any, List, Optional
 
 from .opcodegen import OpcodeGenerator
 from .opcodes import Opcodes
@@ -13,11 +13,23 @@ from .tools import put_color
 from .explain import explain as explain_opcodes
 
 
-class Visitor(OpcodeGenerator, ast.NodeVisitor):
-    def __init__(self, source_code: str, firewall_rules: Dict[str, str]) -> None:
+def _normalize_firewall_rules(firewall_rules: List[str]) -> set[bytes]:
+    normalized = set()
+    for key in firewall_rules:
+        if key.startswith("\\x"):
+            normalized.add(bytes([int(key[2:], 16)]))
+            continue
+        if key in {"I01", "I00"}:
+            key += "\n"
+        normalized.add(key.encode())
+    return normalized
+
+
+class Visitor(ast.NodeVisitor):
+    def __init__(self, source_code: str, firewall_rules: List[str]) -> None:
         self.names = {}  # 变量记录
         self.memo_id = 0  # memo 的顶层 id
-        self.firewall_rules = firewall_rules
+        self.firewall_rules = _normalize_firewall_rules(firewall_rules)
         self.source_code = source_code
         self.lazy_modules = {}  # import requests -> {'requests': 'requests'}
 
@@ -27,10 +39,17 @@ class Visitor(OpcodeGenerator, ast.NodeVisitor):
         self.result = b""
         self.converted_code = []
         self.has_transformation = False
+        self.bypass_choice_counts = {}
         self.gen = OpcodeGenerator(self)
 
     def souse(self) -> None:
         self.result = self.final_opcode + Opcodes.STOP
+        for (label, rules), count in self.bypass_choice_counts.items():
+            print(
+                f"[*] choice {put_color(label, 'blue')} "
+                f"to bypass rule: {put_color(list(rules), 'white')} "
+                f"x{put_color(count, 'white')}"
+            )
 
     def queue_prefix_opcode(self, opcode: bytes) -> None:
         self.pending_prefix_opcodes.append(opcode)

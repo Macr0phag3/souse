@@ -47,7 +47,7 @@ def generate(gen, node: ast.Attribute) -> bytes:
     attr = node.attr
 
     bypass_map = {
-        Opcodes.REDUCE: _by_getattr,
+        "R": _by_getattr,
     }
 
     if isinstance(targets, ast.Name) and targets.id in ctx.lazy_modules:
@@ -55,13 +55,12 @@ def generate(gen, node: ast.Attribute) -> bytes:
         module_name = ctx.lazy_modules[targets.id]
         full_name = f"{module_name}.{attr}"
         bypass_map = {
-            Opcodes.GLOBAL: lambda: _by_imported(module_name, attr, full_name),
-            Opcodes.REDUCE: _by_getattr,
+            "c": lambda: _by_imported(module_name, attr, full_name),
+            "R": _by_getattr,
         }
     else:
         bypass_map = {
-            Opcodes.REDUCE: _by_getattr,
+            "R": _by_getattr,
         }
 
-    choice = gen.check_firewall(list(bypass_map.keys()))
-    return bypass_map[choice]()
+    return gen.generate_with_firewall(bypass_map, node=node)

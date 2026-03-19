@@ -24,16 +24,15 @@ def generate(gen, node: ast.Constant) -> bytes:
         return Opcodes.STRING + payload[1:end] + b"\n"
 
     bypass_map = {
-        Opcodes.STRING: lambda: _by_string(),
+        "V": lambda: _by_string(),
     }
 
     if all(ord(ch) < 128 for ch in node.value):
         # 仅当内容全部是 ASCII 构成时，才允许用 BINSTRING
-        bypass_map[Opcodes.BINSTRING] = lambda: _by_binstring()
+        bypass_map["S"] = lambda: _by_binstring()
 
     if len(encoded) <= 0xFF:
-        bypass_map[Opcodes.SHORT_BINUNICODE] = _by_short_binunicode
-    bypass_map[Opcodes.BINUNICODE] = _by_binunicode
+        bypass_map["\\x8c"] = _by_short_binunicode
+    bypass_map["X"] = _by_binunicode
 
-    choice = gen.check_firewall(list(bypass_map.keys()))
-    return bypass_map[choice]()
+    return gen.generate_with_firewall(bypass_map, node=node)

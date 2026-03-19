@@ -92,6 +92,20 @@ Use `--explain` to print the opcode summary and explanation view after generatio
 python souse/souse.py -f souse/cases/combo-6.py --explain
 ```
 
+#### 3.1.8 firewall rules
+
+`--bypass` uses comma-separated opcode names:
+
+```bash
+python souse/souse.py -f tmp-test.py -p R,o,i
+```
+
+You can also pass a rules file whose content is plain text like:
+
+```text
+R, o, i, \x81
+```
+
 ### 3.2 API
 example:
 
@@ -114,16 +128,16 @@ Out[6]: b'Y29zCnN5c3RlbQooVndob2FtaQp0Ui4='
 
 In [7]: import pickle
 
-In [8]: firewall_rules = {
-    ...:     "V": "*",
-    ...:     "I01": "*",
-    ...:     "I": "100",
-    ...:     "R": "*"
-    ...: }
+In [8]: firewall_rules = [
+    ...:     "V",
+    ...:     "I01",
+    ...:     "I",
+    ...:     "R"
+    ...: ]
 
 In [9]: souse.API(exp, optimized=True, transfer=pickle.loads, firewall_rules=firewall_rules).generate()
-[*] choice o to bypass rule: {'R': '*'}
-[*] choice S to bypass rule: {'V': '*'}
+[*] choice o to bypass rule: ['R'] x1
+[*] choice S to bypass rule: ['V'] x1
 macr0phag3
 Out[9]: 0
 ```
@@ -137,8 +151,6 @@ Out[9]: 0
 - [x] Intelligent Import Transformation (Lazy Import)
 - [x] Intelligent Attribute Assignment Transformation (By `getattr`/`setattr`)
 - [x] Converted code output support
-- [x] value bypass supported
-	- [x] number
 - [x] API
 - [x] `pip install` supported
 - [x] Contextual source error reporting

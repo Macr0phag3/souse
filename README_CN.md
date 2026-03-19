@@ -92,6 +92,20 @@ pytest -q
 python souse/souse.py -f souse/cases/combo-6.py --explain
 ```
 
+#### 3.1.8 防火墙规则格式
+
+`--bypass` 使用逗号分隔的 opcode 列表:
+
+```bash
+python souse/souse.py -f tmp-test.py -p R,o,i
+```
+
+也可以传入规则文件，文件内容直接写成：
+
+```text
+R, o, i, \x81
+```
+
 ### 3.2 API
 示例:
 
@@ -114,16 +128,16 @@ Out[6]: b'Y29zCnN5c3RlbQooVndob2FtaQp0Ui4='
 
 In [7]: import pickle
 
-In [8]: firewall_rules = {
-    ...:     "V": "*",
-    ...:     "I01": "*",
-    ...:     "I": "100",
-    ...:     "R": "*"
-    ...: }
+In [8]: firewall_rules = [
+    ...:     "V",
+    ...:     "I01",
+    ...:     "I",
+    ...:     "R"
+    ...: ]
 
 In [9]: souse.API(exp, optimized=True, transfer=pickle.loads, firewall_rules=firewall_rules).generate()
-[*] choice o to bypass rule: {'R': '*'}
-[*] choice S to bypass rule: {'V': '*'}
+[*] choice o to bypass rule: ['R'] x1
+[*] choice S to bypass rule: ['V'] x1
 macr0phag3
 Out[9]: 0
 ```
@@ -134,7 +148,6 @@ Out[9]: 0
 - [x] 智能导入转换 (Lazy Import)
 - [x] 智能属性/下标赋值转换
 - [x] 转换后的代码回显示支持
-- [x] 基于值的防火墙绕过 (Value bypass)
 - [x] Python API 支持
 - [x] 源码级报错上下文提示
 - [x] 自动化内置函数识别

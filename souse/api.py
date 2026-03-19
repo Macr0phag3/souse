@@ -1,15 +1,15 @@
 import ast
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, List, Optional, Union
 
 from .tools import transfer_funcs
 from .visitor import Visitor
 
 
 class API:
-    def __init__(self, source_code: str, firewall_rules: Optional[Dict[str, str]] = None, optimized: bool = True, transfer: Union[str, Callable[..., Any], List[Callable[..., Any]], None] = '') -> None:
+    def __init__(self, source_code: str, firewall_rules: Optional[List[str]] = None, optimized: bool = True, transfer: Union[str, Callable[..., Any], List[Callable[..., Any]], None] = '') -> None:
         self.source_code = source_code
         self.root = ast.parse(self.source_code)
-        self.firewall_rules = firewall_rules or {}
+        self.firewall_rules = firewall_rules or []
         self.optimized = optimized
         self.transfer = transfer
 

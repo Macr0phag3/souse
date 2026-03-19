@@ -1,5 +1,4 @@
 import argparse
-import json
 import os
 import re
 import shutil
@@ -10,7 +9,7 @@ from .api import API
 from .tools import FUNC_NAME, transfer_funcs, put_color
 
 
-VERSION = '5.1'
+VERSION = '5.2'
 LOGO = (
     f'''
   ██████  ▒█████   █    ██   ██████ ▓█████ 
@@ -30,6 +29,10 @@ LOGO = (
     .replace('▀', put_color('▀', "yellow"))
     .replace('▄', put_color('▄', "yellow"))
 )
+
+
+def _parse_firewall_rules(payload: str) -> list[str]:
+    return [item.strip() for item in payload.split(",") if item.strip()]
 
 
 def cli() -> None:
@@ -91,41 +94,41 @@ def cli() -> None:
     print(f'[*] need check:        {put_color(need_check, ["gray", "green"][int(need_check)])}')
     print(f'[*] need optimize:     {put_color(need_optimize, ["gray", "green"][int(need_optimize)])}')
 
-    firewall_rules = {}
+    firewall_rules = []
     bypass = False
-    if run_test:
-        print(f'[*] try bypass:        {put_color("per-file", "cyan")}')
-        print(f'[*] transfer function: {put_color(transfer, "gray")}\n')
-    else:
-        if args.bypass:
-            try:
-                firewall_rules = json.loads(args.bypass)
-            except Exception as e:
-                try:
-                    firewall_rules = json.load(open(args.bypass, encoding='utf-8'))
-                except Exception as e:
-                    print("\n[!]", put_color(f"{args.bypass} has invalid bypass rules: {e}\n", 'yellow'))
-                else:
-                    if not firewall_rules:
-                        print("\n[!]", put_color(f"{args.bypass} has no rules\n", 'yellow'))
-                    else:
-                        bypass = True
 
-        print(f'[*] try bypass:        {put_color(args.bypass, ["gray", "cyan"][int(bypass)])}')
-        print(f'[*] transfer function: {put_color(transfer, ["blue", "gray"][bool(bypass)])}\n')
+    if args.bypass:
+        try:
+            firewall_rules = _parse_firewall_rules(args.bypass)
+        except Exception as e:
+            try:
+                firewall_rules = _parse_firewall_rules(open(args.bypass, encoding='utf-8').read())
+            except Exception as e:
+                print("\n[!]", put_color(f"{args.bypass} has invalid bypass rules: {e}\n", 'yellow'))
+            else:
+                if not firewall_rules:
+                    print("\n[!]", put_color(f"{args.bypass} has no rules\n", 'yellow'))
+                else:
+                    bypass = True
+        else:
+            if firewall_rules:
+                bypass = True
+
+    print(f'[*] try bypass:        {put_color(args.bypass, ["gray", "cyan"][int(bypass)])}')
+    print(f'[*] transfer function: {put_color(transfer, ["blue", "gray"][bool(bypass)])}\n')
 
     for filename in filenames:
         tip = lambda c: f'[+] input: {put_color(filename, c)}'
 
         source_code = open(filename, encoding='utf-8').read()
         if run_test:
-            firewall_rules = {}
+            firewall_rules = []
             for line in source_code.splitlines():
                 stripped = line.strip()
                 if stripped.startswith("# firewall:"):
                     payload = stripped[len("# firewall:"):].strip()
                     try:
-                        firewall_rules = json.loads(payload)
+                        firewall_rules = _parse_firewall_rules(payload)
                     except Exception as e:
                         raise RuntimeError(f"invalid firewall rules in test file: {e}")
 
