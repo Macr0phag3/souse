@@ -67,6 +67,22 @@ def test_float_constant_generation():
     assert result == b"F1.5\np0\n."
 
 
+def test_large_int_can_bypass_to_long1():
+    source = f"a = {2 ** 100}"
+    result = API(source, firewall_rules=["I"], optimized=False, transfer="").generate()
+
+    assert result.startswith(b"\x8a")
+    assert pickle.loads(result) == 2 ** 100
+
+
+def test_huge_int_can_bypass_to_long4():
+    source = f"a = {1 << 3000}"
+    result = API(source, firewall_rules=["I", "\\x8a"], optimized=False, transfer="").generate()
+
+    assert result.startswith(b"\x8b")
+    assert pickle.loads(result) == 1 << 3000
+
+
 def test_mass_assignment_unsupported():
     source = "a, b = 1, 2"
     with pytest.raises(RuntimeError):

@@ -85,7 +85,7 @@ class _SetValue(_RenderableValue):
         return "{" + ", ".join(str(item) for item in self.items) + "}"
 
 
-_INT_OPS = {"BININT", "BININT1", "BININT2", "INT", "LONG"}
+_INT_OPS = {"BININT", "BININT1", "BININT2", "INT", "LONG", "LONG1", "LONG4"}
 _FLOAT_OPS = {"FLOAT", "BINFLOAT"}
 _STRING_OPS = {"BINUNICODE", "SHORT_BINUNICODE", "UNICODE", "STRING"}
 _BYTES_OPS = {"BINBYTES", "SHORT_BINBYTES", "BYTEARRAY8", "BINBYTES8"}
