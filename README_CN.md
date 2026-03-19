@@ -39,7 +39,7 @@ system(a)
 # b'cos\nsystem\np0\nVwhoami\np1\ng0\n(g1\ntR.'
 ```
 
-<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/case-1.png" width="600">
+<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/case-1.png" width="500">
 
 #### 3.1.2 示例 2
 
@@ -53,7 +53,7 @@ os.system("whoami")
 # b'cos\nsystem\np0\ng0\n(Vwhoami\ntR.'
 ```
 
-<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/case-2.png" width="600">
+<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/case-2.png" width="500">
 
 #### 3.1.3 示例 3
 
