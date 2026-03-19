@@ -11,6 +11,9 @@ def generate(gen, node: ast.Constant) -> bytes:
     def _by_int() -> bytes:
         return Opcodes.INT + f"{value}\n".encode()
 
+    def _by_long() -> bytes:
+        return Opcodes.LONG + f"{value}L\n".encode()
+
     def _by_binint1() -> bytes:
         return Opcodes.BININT1 + bytes([value])
 
@@ -40,5 +43,6 @@ def generate(gen, node: ast.Constant) -> bytes:
     if len(pickle.encode_long(value)) < 0x100:
         bypass_map[Opcodes.LONG1] = _by_long1
     bypass_map[Opcodes.LONG4] = _by_long4
+    bypass_map[Opcodes.LONG] = _by_long
 
     return gen.generate_with_firewall(bypass_map, node=node)

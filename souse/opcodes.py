@@ -9,6 +9,7 @@ from .tools import put_color
 class Opcodes:
     # 基础类型
     INT = b'I'
+    LONG = b'L'
     BININT = b'J'
     BININT1 = b'K'
     BININT2 = b'M'

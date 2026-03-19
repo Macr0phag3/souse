@@ -83,6 +83,14 @@ def test_huge_int_can_bypass_to_long4():
     assert pickle.loads(result) == 1 << 3000
 
 
+def test_large_int_can_bypass_to_long():
+    source = f"a = {2 ** 100}"
+    result = API(source, firewall_rules=["I", "\\x8a", "\\x8b"], optimized=False, transfer="").generate()
+
+    assert result.startswith(b"L")
+    assert pickle.loads(result) == 2 ** 100
+
+
 def test_small_tuple_can_bypass_to_tuple1_tuple2_tuple3():
     result1 = API("a = (1,)", firewall_rules=["t"], optimized=False, transfer="").generate()
     result2 = API("a = (1, 2)", firewall_rules=["t"], optimized=False, transfer="").generate()
