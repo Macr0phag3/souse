@@ -3,9 +3,13 @@ A tool for converting Python source code to opcode(pickle), source code is paylo
 
 [中文版](./README_CN.md)
 
+try now: `pip3 install --upgrade souse`
+
 ## 1. help
 
 <img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/help.png" width="600">
+
+After installing with pip, you can use `souse -h` directly.
 
 ## 2. Key Features
 
@@ -25,24 +29,30 @@ opcode supported list: [opcode](./opcodes.md)
 `./souse/cases/` contains example inputs and case-level regression samples for `souse.py`.
 
 #### 3.1.1 case 1
+```
+» cat souse/cases/call-1.py
+from os import system
 
-source code:
+a = "whoami"
+system(a)
+# b'cos\nsystem\np0\nVwhoami\np1\ng0\n(g1\ntR.'
+```
 
-<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/eg-1.png" width="300">
-
-opcode:
-
-<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/eg-1-s.png" width="600">
+<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/case-1.png" width="600">
 
 #### 3.1.2 case 2
 
-source code:
+Automatically reconstructs non-pickleable Python source code into fully compatible opcode sequences.
 
-<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/eg-2.png" width="300">
+```
+» cat souse/cases/call-3.py
+import os
 
-opcode:
+os.system("whoami")
+# b'cos\nsystem\np0\ng0\n(Vwhoami\ntR.'
+```
 
-<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/eg-2-s.png" width="600">
+<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/case-2.png" width="600">
 
 #### 3.1.3 case 3
 
@@ -59,40 +69,39 @@ c
 
 transfer opcode:
 
-<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/eg-3.png" width="600">
+```py
+In [1]: import base64, souse
+
+In [2]: exp = "from os import system\nsystem('whoami')"
+
+In [3]: souse.API(exp, optimized=True, transfer=base64.b64encode).generate()
+Out[3]: b'Y29zCnN5c3RlbQooVndob2FtaQp0Ui4='
+```
 
 supported(You can customize it when calling the API):
 - [x] base64_encode
 - [x] hex_encode
 - [x] url_encode
 
-#### 3.1.5 test code
+#### 3.1.5 run tests
 
-<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/test.png" width="400">
-
-#### 3.1.6 run tests
+Requires `pytest`、`pytest_cov `.
 
 ```bash
 python souse/souse.py --run-test
 ```
 
-- Requires `pytest`.
-
-For the full test suite during development:
-
-```bash
-pytest -q
-```
-
-#### 3.1.7 explain opcodes
+#### 3.1.6 explain opcodes
 
 Use `--explain` to print the opcode summary and explanation view after generation:
 
 ```bash
-python souse/souse.py -f souse/cases/combo-6.py --explain
+python souse/souse.py -f souse/cases/call-1.py --explain
 ```
 
-#### 3.1.8 firewall rules
+<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/explain.png" width="600">
+
+#### 3.1.7 firewall rules
 
 `--bypass` uses comma-separated opcode names:
 
