@@ -129,6 +129,27 @@ def test_list_and_dict_can_bypass_to_appends_and_setitems():
     assert pickle.loads(dict_result) == {"x": 1, "y": 2}
 
 
+def test_single_item_list_can_bypass_to_append():
+    result = API("a = [{'x': 1}]", firewall_rules=["l", "e"], optimized=False, transfer="").generate()
+
+    assert result.startswith(b"](Vx\nI1\nda")
+    assert b"a" in result
+    assert pickle.loads(result) == [{"x": 1}]
+
+
+def test_multi_item_list_can_bypass_to_repeated_append():
+    result = API(
+        "a = [{'x': 1}, {'y': 2}]",
+        firewall_rules=["l", "e"],
+        optimized=False,
+        transfer="",
+    ).generate()
+
+    assert result.startswith(b"](Vx\nI1\nda(Vy\nI2\nda")
+    assert result.count(b"a") >= 2
+    assert pickle.loads(result) == [{"x": 1}, {"y": 2}]
+
+
 def test_set_can_bypass_to_additems():
     result = API("a = {1, 2}", firewall_rules=["R"], optimized=False, transfer="").generate()
 

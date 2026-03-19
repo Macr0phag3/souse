@@ -10,7 +10,7 @@
 | \x4e | `N` | NONE | 0 | 所有版本 | ✅ | 构造 None | 将 None 推入栈中。 |
 | \x56 | `V` | UNICODE | 0 | 所有版本 | ✅ | 构造字符串 | 推入一个 Python Unicode 字符串对象。参数是 Unicode 字符串的 raw-unicode-escape 编码，因此可能包含嵌入的转义序列。参数延伸到下一个换行符。 |
 | \x46 | `F` | FLOAT | 0 | 所有版本 | ✅ | 构造浮点数 | 以换行符结尾的十进制浮点数字面量。参数是 repr(a_float)，通常需要 17 位有效数字才能在往返转换中保持一致（对于 IEEE-754 双精度值是这样，Python float 在大多数机器上映射为此类值）。通常 FLOAT 不能跨机器传输无穷大、NaN 或负零，但在比 IEEE-754 双精度更高精度的机器上，它可能比 BINFLOAT 造成的损害更小。 |
-| \x61 | `a` | APPEND | 0 | 所有版本 |  |  | 将一个对象追加到列表中。栈变化：`... pylist anyobject -> ... pylist+[anyobject]`。实际上 pylist 是原地扩展的。 |
+| \x61 | `a` | APPEND | 0 | 所有版本 | ✅ | 结合 EMPTY_LIST 构造列表 | 将一个对象追加到列表中。栈变化：`... pylist anyobject -> ... pylist+[anyobject]`。实际上 pylist 是原地扩展的。 |
 | \x6c | `l` | LIST | 0 | 所有版本 | ✅ | 构造列表 | 根据栈顶的一段（从 markobject 之后开始）构建列表。markobject 之后的所有栈条目被放入一个 Python 列表中，该列表替换从 markobject 开始的所有栈内容。 |
 | \x74 | `t` | TUPLE | 0 | 所有版本 | ✅ | 构造元组 | 根据栈顶的一段（从 markobject 之后开始）构建元组。例如：`... markobject 1 2 3 'abc' -> ... (1, 2, 3, 'abc')`。 |
 | \x64 | `d` | DICT | 0 | 所有版本 | ✅ | 构造字典 | 根据栈顶的一段（从 markobject 之后开始）构建字典。例如：`... markobject 1 2 3 'abc' -> ... {1: 2, 3: 'abc'}`。栈中的内容交替作为键和值。 |
@@ -36,7 +36,7 @@
 | \x5d | `]` | EMPTY_LIST | 1 | 所有版本 | ✅ | 构造空列表 | 推入一个空列表。 |
 | \x65 | `e` | APPENDS | 1 | 所有版本 | ✅ | 构造非空列表 | 将栈上的一段对象切片扩展到列表中。栈变化：`... pylist markobject stackslice -> ... pylist+stackslice`。实际上 pylist 是原地扩展的。 |
 | \x29 | `)` | EMPTY_TUPLE | 1 | 所有版本 | ✅ | 构造空元组 | 推入一个空元组。 |
-| \x7d | `}` | EMPTY_DICT | 1 | 所有版本 | ✅ | 构造空字典 | 推入一个空字典。 |
+| \x7d | `}` | EMPTY_DICT | 1 | 所有版本 | ✅ | 构造空字典（结合 SETITEMS 后可以构造非空字典） | 推入一个空字典。 |
 | \x75 | `u` | SETITEMS | 1 | 所有版本 | ✅ | 下标赋值(模拟 `setitem`) | 向现有字典添加任意数量的键值对。栈中 markobject 之后的内容作为键值交替序列，添加到 markobject 下方的字典中。 |
 | \x31 | `1` | POP_MARK | 1 | 所有版本 |  |  | 弹出栈中 markobject 及其以上的所有对象。当使用变长对象的指令完成时，使用 POP_MARK 清理栈。 |
 | \x68 | `h` | BINGET | 1 | 所有版本 |  |  | 从 memo 中读取对象。索引由随后的 1 字节无符号整数给出。 |

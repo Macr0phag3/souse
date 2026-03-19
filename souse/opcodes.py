@@ -30,6 +30,7 @@ class Opcodes:
     # 集合类型
     MARK = b'('
     EMPTY_LIST = b']'
+    APPEND = b'a'
     APPENDS = b'e'
     LIST = b'l'
     EMPTY_TUPLE = b')'
