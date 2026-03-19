@@ -100,7 +100,7 @@ python souse/souse.py --run-test
 python souse/souse.py -f souse/cases/call-1.py --explain
 ```
 
-<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/explain.png" width="600">
+<img src="https://raw.githubusercontent.com/Macr0phag3/souse/master/pics/explain.png" width="500">
 
 #### 3.1.7 防火墙规则格式
 
