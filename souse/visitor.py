@@ -70,9 +70,15 @@ class Visitor(ast.NodeVisitor):
             end = end if end is not None else lineno
             lines = self.source_code.splitlines()
             if start < len(lines):
-                context = f" in {put_color(lines[start:end], 'cyan')}"
+                context = put_color(lines[start:end], 'cyan')
 
-        raise RuntimeError(put_color(msg, "red") + context)
+        msg = put_color(msg, "red")
+        if context and "\n" in msg:
+            first, rest = msg.split("\n", 1)
+            raise RuntimeError(first + f": {context}\n" + rest)
+        if context:
+            raise RuntimeError(msg + f" in {context}")
+        raise RuntimeError(msg)
 
     def generic_visit(self, node: ast.AST) -> None:
         # 只允许“容器/上下文”节点走默认遍历：

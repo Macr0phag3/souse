@@ -136,6 +136,18 @@ def test_memo_can_bypass_to_memoize():
     assert pickle.loads(result) == 1
 
 
+def test_stack_global_can_bypass_global_for_attribute():
+    result = API(
+        "import os\ncurrent = os.getcwd\ncurrent\n",
+        firewall_rules=["c"],
+        optimized=False,
+        transfer="",
+    ).generate()
+
+    assert b"\x93" in result
+    assert pickle.loads(result) == __import__("os").getcwd
+
+
 def test_mass_assignment_unsupported():
     source = "a, b = 1, 2"
     with pytest.raises(RuntimeError):

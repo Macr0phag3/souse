@@ -11,14 +11,14 @@ def test_firewall_rejects_nested_opcode_in_real_payload():
     with pytest.raises(RuntimeError, match="can NOT bypass"):
         API(
             'getattr("abc", "upper")',
-            firewall_rules=["c"],
+            firewall_rules=["c", "\\x93"],
             optimized=False,
             transfer="",
         ).generate()
 
 
 def test_generate_with_firewall_propagates_candidate_error():
-    visitor = Visitor("None", ["c"])
+    visitor = Visitor("None", ["c", "\\x93"])
 
     def _unsafe() -> bytes:
         return visitor.gen.emit(ast.Name(id="getattr", ctx=ast.Load()))

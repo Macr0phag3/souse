@@ -45,6 +45,7 @@ class Opcodes:
     OBJ = b'o'
     INST = b'i'
     GLOBAL = b'c'
+    STACK_GLOBAL = b'\x93'
     PUT = b'p'
     MEMOIZE = b'\x94'
     GET = b'g'
@@ -208,6 +209,7 @@ class OpcodeGenerator:
                 field: copy.deepcopy(getattr(self.ctx, field))
                 for field in self._ROLLBACK_FIELDS
             }
+            prefix_count = len(self.ctx.pending_prefix_opcodes)
 
             # 真正执行当前候选写法并拿到生成出的 payload
             payload = producer()
@@ -215,7 +217,6 @@ class OpcodeGenerator:
                 self._restore_ctx(snapshot)
                 continue
 
-            prefix_count = len(self.ctx.pending_prefix_opcodes)
             blocked_opcodes = self._get_blocked_rules(
                 b"".join(self.ctx.pending_prefix_opcodes[prefix_count:]) + payload
             )
@@ -238,9 +239,12 @@ class OpcodeGenerator:
             return payload
 
         if rejected_by_firewall:
+            lines = ["can NOT bypass"]
+            for label, rules in rejected_by_firewall.items():
+                lines.append(f"- {put_color(', '.join(rules), 'yellow')} blocked {put_color(label, 'white')}")
             self.ctx._error(
                 node,
-                f"can NOT bypass: {put_color(rejected_by_firewall, 'white')}",
+                "\n".join(lines),
             )
 
         self.ctx._error(

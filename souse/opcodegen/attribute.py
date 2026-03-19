@@ -1,7 +1,6 @@
 import ast
 
 from ..opcodes import Opcodes
-from .put_memo import generate as put_memo
 
 
 def generate(gen, node: ast.Attribute) -> bytes:
@@ -11,15 +10,14 @@ def generate(gen, node: ast.Attribute) -> bytes:
         """
         ctx = gen.ctx
         if full_name not in ctx.names:
-            opcode, memo_name = put_memo(
-                gen,
-                Opcodes.GLOBAL + f'{module_name}\n{attr}\n'.encode('utf-8'),
-                node=node,
+            import_node = ast.ImportFrom(
+                module=module_name,
+                names=[ast.alias(name=attr, asname=None)],
+                level=0,
             )
-            ctx.names[full_name] = [memo_name, module_name]
-            ctx.converted_code.append(f"from {module_name} import {attr}")
+            ctx.queue_prefix_opcode(gen.emit(import_node))
+            ctx.names[full_name] = ctx.names[attr]
             ctx.has_transformation = True
-            ctx.queue_prefix_opcode(opcode)
         return Opcodes.GET + f'{ctx.names[full_name][0]}\n'.encode('utf-8')
 
     def _by_getattr() -> bytes:
@@ -54,7 +52,7 @@ def generate(gen, node: ast.Attribute) -> bytes:
         module_name = ctx.lazy_modules[targets.id]
         full_name = f"{module_name}.{attr}"
         bypass_map = {
-            Opcodes.GLOBAL: lambda: _by_imported(module_name, attr, full_name),
+            "import_from": lambda: _by_imported(module_name, attr, full_name),
             Opcodes.REDUCE: _by_getattr,
         }
     else:
